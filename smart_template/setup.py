@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'template = smart_template.template:main',
+            'keypress = smart_template.keypress:main',
             'mri_tracking_interface = smart_template.mri_tracking_interface:main'
         ],
     },
