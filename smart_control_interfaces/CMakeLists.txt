@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(stage_control_interfaces)
+project(smart_control_interfaces)
 
 # Default to C99
 if(NOT CMAKE_C_STANDARD)

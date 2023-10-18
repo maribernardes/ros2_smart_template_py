@@ -174,7 +174,7 @@ class SmartTemplate(Node):
         # WARNING: Galil channel B inverted, that is why the my_goal is negative
         self.send_movement_in_counts(my_goal.x*MM_2_COUNT,"A")
         self.send_movement_in_counts(-my_goal.z*MM_2_COUNT,"B")
-        # self.send_movement_in_counts(my_goal.y*MM_2_COUNT,"C") # TODO: PLEASE CHECK THIS PEDRO!
+        self.send_movement_in_counts(my_goal.y*MM_2_COUNT,"C")
 
         # TODO: Feedback/Results monitoring part
         # Publish the feedback

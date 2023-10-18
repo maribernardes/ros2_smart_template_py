@@ -53,6 +53,7 @@ class MRITrackingInterface(Node):
 #### Stored variables ###################################################
         self.zFrameToRobot = np.empty(shape=[0,7])  # ZFrame to robot frame transform
         self.tip = np.empty(shape=[0,3])            # Tracked tip position (robot frame)
+        self.stage = np.empty(shape=[0,3])
         self.initial_point = np.empty(shape=[0,3])  # Needle guide position at begining of experiment (robot frame)
 
         # Flags
@@ -83,6 +84,7 @@ class MRITrackingInterface(Node):
     # Get current robot pose
     def robot_callback(self, msg_robot):
         robot = msg_robot.pose
+        self.stage = np.array([robot.position.x, robot.position.y, robot.position.z])
         if (self.initialize_insertion is True):
             self.initial_point = np.array([robot.position.x, robot.position.y, robot.position.z])
             self.get_logger().debug('Initial stage position in (%f, %f, %f)' %(self.initial_point[0], self.initial_point[1], self.initial_point[2])) 

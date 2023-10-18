@@ -1,2 +1,2 @@
-# Stage Control Interfaces
-Package containing service and action definitions for the Stage Control package.
+# Smart Control Interfaces
+Package containing service and action definitions for the smart_template package.
