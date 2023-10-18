@@ -5,6 +5,7 @@ import numpy as np
 import ament_index_python 
 import serial
 import time
+import math
 import quaternion
 
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
@@ -60,15 +61,16 @@ class SmartTemplate(Node):
         #Stored values
         self.initial_point = np.empty(shape=[0,3])  # Initial point (at the begining of experiment)
 
-    def getGuidePosition(self):
+    def get_position(self):
         try:
             data_temp = self.galil.GCommand('TP')
             data = data_temp.split(',')
             # Change self.initial_point is the initial position is not (0,0)
-            # WARNING: Galil channel B inverted, that is why the value is negative
-            x = float(data[0])*COUNT_2_MM# + self.initial_point[0,0]
-            y = float(data[2])*COUNT_2_MM# + self.initial_point[1,0] TODO: Check the ratio for y (depth) and implement pose 
-            z =-float(data[1])*COUNT_2_MM# + self.initial_point[2,0]
+            # WARNING: Galil channel B inverted, that is why the value is negative (NOT SURE IF STILL TRUE)
+            # TODO: Check the count ratio for each motor. Check channel B direction
+            x = float(data[0])*COUNT_2_MM# + self.initial_point[0,0] # CHANNEL A
+            y = float(data[2])*COUNT_2_MM# + self.initial_point[1,0] # CHANNEL C
+            z =-float(data[1])*COUNT_2_MM# + self.initial_point[2,0] # CHANNEL B
             return [x, y, z]
         except:
             return "error TP"
@@ -76,7 +78,7 @@ class SmartTemplate(Node):
     # Timer to publish '/stage/state/pose'  
     def timer_stage_pose_callback(self):
         # Read guide position from robot motors
-        position = self.getGuidePosition()
+        position = self.get_position()
         # Construct robot message to publish             
         msg = PoseStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
@@ -147,7 +149,10 @@ class SmartTemplate(Node):
             return True
         except:
             return False
-            
+    
+    def distance_to_goal(self, goal, position):
+        return math.sqrt((goal.x-position[0])**2+(goal.y-position[1])**2+(goal.z-position[2])**2)
+    
     # Execute a goal
     async def execute_callback(self, goal_handle):
         self.get_logger().debug('Executing goal...')
@@ -172,18 +177,22 @@ class SmartTemplate(Node):
 
         # Send control inputs
         # WARNING: Galil channel B inverted, that is why the my_goal is negative
+        # TODO: Check if Channel B is still inverted
         self.send_movement_in_counts(my_goal.x*MM_2_COUNT,"A")
         self.send_movement_in_counts(-my_goal.z*MM_2_COUNT,"B")
-        self.send_movement_in_counts(my_goal.y*MM_2_COUNT,"C")
+        self.send_movement_in_counts(my_goal.y*MM_2_COUNT,"C") 
 
-        # TODO: Feedback/Results monitoring part
-        # Publish the feedback
-        position = self.getGuidePosition()
+        position = self.get_position()
+
+        # Feedback loop (while goal is not reached)
         feedback = MoveStage.Feedback()
-        feedback.x = position[0]
-        feedback.y = position[1]
-        feedback.z = position[2]
-        goal_handle.publish_feedback(feedback)
+        while self.distance_to_goal(my_goal, position) < my_goal.eps:
+            feedback.x = position[0]
+            feedback.y = position[1]
+            feedback.z = position[2]
+            goal_handle.publish_feedback(feedback)
+            time.sleep(1)
+            position = self.get_position()
 
         # Set as successful
         goal_handle.succeed()

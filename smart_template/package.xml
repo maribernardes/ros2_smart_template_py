@@ -4,7 +4,8 @@
   <name>smart_template</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="pedrolfm@gmail.com">pedro</maintainer>
+  <maintainer email="pedrolfm@gmail.com">Pedro Moreira</maintainer>
+  <maintainer email="maribernardes@gmail.com">Mariana Bernardes</maintainer>
   <license>TODO: License declaration</license>
 
   <test_depend>ament_copyright</test_depend>
