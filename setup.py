@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'template = smart_template.template:main'
+            'template = smart_template.template:main',
+            'mri_tracking_interface = smart_template.mri_tracking_interface:main'
         ],
     },
 )
