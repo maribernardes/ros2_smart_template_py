@@ -11,7 +11,7 @@ from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from stage_control_interfaces.action import MoveStage
+from smart_control_interfaces.action import MoveStage
 from ros2_igtl_bridge.msg import Transform
 from numpy import asarray, savetxt, loadtxt
 from scipy.ndimage import median_filter
@@ -52,39 +52,38 @@ class SmartTemplate(Node):
         #Initial position is always (0,0)
         self.galil.GCommand('DPA=0')
         self.galil.GCommand('DPB=0')
+        self.galil.GCommand('DPC=0')
         self.galil.GCommand('PTA=1')
         self.galil.GCommand('PTB=1')
+        self.galil.GCommand('PTC=1')
 
         #Stored values
-        self.initial_point = np.empty(shape=[0,7])  # Initial point (at the begining of experiment)
-        self.registration = np.empty(shape=[0,7])   # Registration transform (from aurora to stage)
-        self.aurora = np.empty(shape=[0,7])         # All stored Aurora readings as they are sent
+        self.initial_point = np.empty(shape=[0,3])  # Initial point (at the begining of experiment)
 
-    def getMotorPosition(self):
+    def getGuidePosition(self):
         try:
             data_temp = self.galil.GCommand('TP')
-            return data_temp
+            data = data_temp.split(',')
+            # Change self.initial_point is the initial position is not (0,0)
+            # WARNING: Galil channel B inverted, that is why the value is negative
+            x = float(data[0])*COUNT_2_MM# + self.initial_point[0,0]
+            y = float(data[2])*COUNT_2_MM# + self.initial_point[1,0] TODO: Check the ratio for y (depth) and implement pose 
+            z =-float(data[1])*COUNT_2_MM# + self.initial_point[2,0]
+            return [x, y, z]
         except:
             return "error TP"
 
     # Timer to publish '/stage/state/pose'  
     def timer_stage_pose_callback(self):
         # Read guide position from robot motors
-        read_position = self.getMotorPosition()
-        Z = read_position.split(',')
-        
+        position = self.getGuidePosition()
         # Construct robot message to publish             
-        # Add the initial point (home position)
         msg = PoseStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = "stage"
-        
-        # Change self.initial_point is the initial position is not (0,0)
-        msg.pose.position.x = float(Z[0])*COUNT_2_MM# + self.initial_point[0,0]
-        msg.pose.position.y = 0.0 
-        # WARNING: Galil channel B inverted, that is why the my_goal is negative
-        msg.pose.position.z = -float(Z[1])*COUNT_2_MM# + self.initial_point[2,0]
-        #self.get_logger().info('motor read: %f %f ' % (float(Z[0]),float(Z[1])))
+        msg.pose.position.x = position[0]
+        msg.pose.position.y = position[1]
+        msg.pose.position.z = position[2]
         msg.pose.orientation = Quaternion(w=float(1), x=float(0), y=float(0), z=float(0))
         self.publisher_stage_pose.publish(msg)
         self.get_logger().debug('stage_pose: x=%f, y=%f, z=%f, q=[%f, %f, %f, %f] in %s frame'  % (msg.pose.position.x, msg.pose.position.y, \
@@ -92,7 +91,7 @@ class SmartTemplate(Node):
 
     # Initialization after needle is positioned in the initial point (after SPACE hit)
     def initial_point_callback(self, msg):
-        if (self.initial_point.size == 0):
+        if (self.initial_point.size == 0):  # Do only once
             self.ser.write(str.encode("DPA=0;"))
             time.sleep(0.02)
             self.ser.write(str.encode("PTA=1;"))
@@ -101,22 +100,17 @@ class SmartTemplate(Node):
             time.sleep(0.02)
             self.ser.write(str.encode("PTB=1;"))
             time.sleep(0.02)
+            self.ser.write(str.encode("DPC=0;"))
+            time.sleep(0.02)
+            self.ser.write(str.encode("PTC=1;"))
+            time.sleep(0.02)
             self.ser.write(str.encode("SH;")) #Check this code
             self.AbsoluteMode = True
             self.get_logger().info('Needle guide at initial position')
 
             # Store initial point
             initial_point = msg.point
-            self.initial_point = np.array([[initial_point.position.x, initial_point.position.y, initial_point.position.z, \
-                                            1, 0, 0, 0]]).T
-
-            # Load stored registration transform
-            self.get_logger().info('Loading stored registration transform ...')
-            try:
-                self.registration = np.array(loadtxt(os.path.join(os.getcwd(),'src','trajcontrol','files','registration.csv'), delimiter=','))
-            except IOError:
-                self.get_logger().info('Could not find registration.csv file')
-            self.get_logger().info('Registration = %s' %  (self.registration))
+            self.initial_point = np.array([initial_point.position.x, initial_point.position.y, initial_point.position.z])
 
     # Destroy de action server
     def destroy(self):
@@ -157,10 +151,6 @@ class SmartTemplate(Node):
     # Execute a goal
     async def execute_callback(self, goal_handle):
         self.get_logger().debug('Executing goal...')
-        feedback_msg = MoveStage.Feedback()
-        # TODO: Feedback part
-        feedback_msg.x = 0.0
-        feedback_msg.z = 0.0
 
         # Start executing the action
         if goal_handle.is_cancel_requested:
@@ -168,35 +158,39 @@ class SmartTemplate(Node):
             self.get_logger().info('Goal canceled')
             return MoveStage.Result()
 
-        # Subtract initial point from goal because robot considers initial position to be (0,0)
+        # Get goal
         my_goal = goal_handle.request
-
+        # Subtract initial point from goal because robot considers initial position to be (0,0)
         #########################################################
-        # change self.initial_point is initial position is not (0,0)
+        # change self.initial_point if initial position is not (0,0)
         my_goal.x = my_goal.x #- self.initial_point[0,0]
+        my_goal.y = my_goal.y #- self.initial_point[1,0]
         my_goal.z = my_goal.z #- self.initial_point[2,0]
         #########################################################
 
-        self.get_logger().info("command %f %f" % (my_goal.x,my_goal.z))
-        # Update control input - in Meters
-        self.send_movement_in_counts(my_goal.x*MM_2_COUNT,"A")
-        
+        self.get_logger().info("Command %f, %f, %f" % (my_goal.x, my_goal.y, my_goal.z))
+
+        # Send control inputs
         # WARNING: Galil channel B inverted, that is why the my_goal is negative
+        self.send_movement_in_counts(my_goal.x*MM_2_COUNT,"A")
         self.send_movement_in_counts(-my_goal.z*MM_2_COUNT,"B")
-      
-        data = self.getMotorPosition()
-        # TODO: populate feedback
-        feedback_msg.x = float(0.0)
+        # self.send_movement_in_counts(my_goal.y*MM_2_COUNT,"C") # TODO: PLEASE CHECK THIS PEDRO!
 
+        # TODO: Feedback/Results monitoring part
         # Publish the feedback
-        goal_handle.publish_feedback(feedback_msg)
+        position = self.getGuidePosition()
+        feedback = MoveStage.Feedback()
+        feedback.x = position[0]
+        feedback.y = position[1]
+        feedback.z = position[2]
+        goal_handle.publish_feedback(feedback)
+
+        # Set as successful
         goal_handle.succeed()
-
-        # Populate result message
         result = MoveStage.Result()
-        result.x = feedback_msg.x
-        self.get_logger().debug('Returning result: {0}'.format(result.x))
-
+        result.x = position[0]
+        result.y = position[1]
+        result.z = position[2]
         return result
 
 ########################################################################
@@ -214,7 +208,6 @@ def main():
     # when the garbage collector destroys the node object)
     smart_template.destroy_node()
     rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()
