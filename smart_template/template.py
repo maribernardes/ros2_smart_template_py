@@ -34,7 +34,7 @@ class SmartTemplate(Node):
         super().__init__('smart_template')      
 
         #Topics from sensor processing node
-        self.subscription_initial_point = self.create_subscription(PoseStamped, '/stage/state/initial_point', self.intial_point_callback, 10)
+        self.subscription_initial_point = self.create_subscription(PoseStamped, '/stage/state/initial_point', self.initial_point_callback, 10)
         self.subscription_initial_point  # prevent unused variable warning
 
         #Published topics
@@ -87,7 +87,7 @@ class SmartTemplate(Node):
         #self.get_logger().info('motor read: %f %f ' % (float(Z[0]),float(Z[1])))
         msg.pose.orientation = Quaternion(w=float(1), x=float(0), y=float(0), z=float(0))
         self.publisher_stage_pose.publish(msg)
-        self.get_logger().info('stage_pose: x=%f, y=%f, z=%f, q=[%f, %f, %f, %f] in %s frame'  % (msg.pose.position.x, msg.pose.position.y, \
+        self.get_logger().debug('stage_pose: x=%f, y=%f, z=%f, q=[%f, %f, %f, %f] in %s frame'  % (msg.pose.position.x, msg.pose.position.y, \
                 msg.pose.position.z,  msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.header.frame_id))
 
     # Initialization after needle is positioned in the initial point (after SPACE hit)
