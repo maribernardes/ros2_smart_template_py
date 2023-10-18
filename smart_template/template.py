@@ -34,13 +34,13 @@ class SmartTemplate(Node):
         super().__init__('smart_template')      
 
         #Topics from sensor processing node
-        self.subscription_initial_point = self.create_subscription(PoseStamped, '/stage/state/initial_point', self.initial_point_callback, 10)
+        self.subscription_initial_point = self.create_subscription(PoseStamped, '/stage/initial_point', self.initial_point_callback, 10)
         self.subscription_initial_point  # prevent unused variable warning
 
         #Published topics
         timer_period = 0.2  # seconds
         self.timer = self.create_timer(timer_period, self.timer_stage_pose_callback)
-        self.publisher_stage_pose = self.create_publisher(PoseStamped, 'stage/state/pose', 10)
+        self.publisher_stage_pose = self.create_publisher(PoseStamped, '/stage/state/guide_pose', 10)
 
         #Action server
         self._action_server = ActionServer(self, MoveStage, '/move_stage', execute_callback=self.execute_callback,\
@@ -80,10 +80,10 @@ class SmartTemplate(Node):
         msg.header.frame_id = "stage"
         
         # Change self.initial_point is the initial position is not (0,0)
-        msg.pose.position.x = 0.001*float(Z[0])*COUNT_2_MM# + self.initial_point[0,0]
+        msg.pose.position.x = float(Z[0])*COUNT_2_MM# + self.initial_point[0,0]
         msg.pose.position.y = 0.0 
         # WARNING: Galil channel B inverted, that is why the my_goal is negative
-        msg.pose.position.z = -0.001*float(Z[1])*COUNT_2_MM# + self.initial_point[2,0]
+        msg.pose.position.z = -float(Z[1])*COUNT_2_MM# + self.initial_point[2,0]
         #self.get_logger().info('motor read: %f %f ' % (float(Z[0]),float(Z[1])))
         msg.pose.orientation = Quaternion(w=float(1), x=float(0), y=float(0), z=float(0))
         self.publisher_stage_pose.publish(msg)
@@ -179,10 +179,10 @@ class SmartTemplate(Node):
 
         self.get_logger().info("command %f %f" % (my_goal.x,my_goal.z))
         # Update control input - in Meters
-        self.send_movement_in_counts(1000.0*my_goal.x*MM_2_COUNT,"A")
+        self.send_movement_in_counts(my_goal.x*MM_2_COUNT,"A")
         
         # WARNING: Galil channel B inverted, that is why the my_goal is negative
-        self.send_movement_in_counts(-1000.0*my_goal.z*MM_2_COUNT,"B")
+        self.send_movement_in_counts(-my_goal.z*MM_2_COUNT,"B")
       
         data = self.getMotorPosition()
         # TODO: populate feedback
