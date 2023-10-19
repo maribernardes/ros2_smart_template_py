@@ -29,6 +29,8 @@ MM_2_COUNT = 1088.9
 COUNT_2_MM = 1.0/1088.9
 SAFE_LIMIT = 60.0
 
+TIMEOUT = 2             # timeout (sec) for move_stage action server 
+
 class SmartTemplate(Node):
 
     def __init__(self):
@@ -71,6 +73,7 @@ class SmartTemplate(Node):
             x = float(data[0])*COUNT_2_MM# + self.initial_point[0,0] # CHANNEL A
             y = float(data[2])*COUNT_2_MM# + self.initial_point[1,0] # CHANNEL C
             z =-float(data[1])*COUNT_2_MM# + self.initial_point[2,0] # CHANNEL B
+            # self.get_logger().info('x=%f, y=%f, z=%f' %(x, y, z))
             return [x, y, z]
         except:
             return "error TP"
@@ -150,56 +153,87 @@ class SmartTemplate(Node):
         except:
             return False
     
-    def distance_to_goal(self, goal, position):
-        return math.sqrt((goal.x-position[0])**2+(goal.y-position[1])**2+(goal.z-position[2])**2)
+    def distance_positions(self, goal, position):        
+        return math.sqrt((goal[0]-position[0])**2+(goal[1]-position[1])**2+(goal[2]-position[2])**2)
     
     # Execute a goal
     async def execute_callback(self, goal_handle):
         self.get_logger().debug('Executing goal...')
+        feedback = MoveStage.Feedback()
+        result = MoveStage.Result()
 
         # Start executing the action
         if goal_handle.is_cancel_requested:
             goal_handle.canceled()
             self.get_logger().info('Goal canceled')
-            return MoveStage.Result()
+            return result
 
         # Get goal
         my_goal = goal_handle.request
+        #########################################################
         # Subtract initial point from goal because robot considers initial position to be (0,0)
-        #########################################################
         # change self.initial_point if initial position is not (0,0)
-        my_goal.x = my_goal.x #- self.initial_point[0,0]
-        my_goal.y = my_goal.y #- self.initial_point[1,0]
-        my_goal.z = my_goal.z #- self.initial_point[2,0]
+        goal = [my_goal.x, my_goal.y, my_goal.z]
+        # goal = [my_goal.x+initial_position[0], my_goal.y+initial_position[1], my_goal.z+initial_position[2]]
+        self.get_logger().info("Command %s" % (goal))
         #########################################################
-
-        self.get_logger().info("Command %f, %f, %f" % (my_goal.x, my_goal.y, my_goal.z))
 
         # Send control inputs
         # WARNING: Galil channel B inverted, that is why the my_goal is negative
         # TODO: Check if Channel B is still inverted
-        self.send_movement_in_counts(my_goal.x*MM_2_COUNT,"A")
-        self.send_movement_in_counts(-my_goal.z*MM_2_COUNT,"B")
-        self.send_movement_in_counts(my_goal.y*MM_2_COUNT,"C") 
+        self.send_movement_in_counts(goal[0]*MM_2_COUNT,"A")    #X = CH_A
+        self.send_movement_in_counts(-goal[2]*MM_2_COUNT,"B")   #Z = CH_B
+        self.send_movement_in_counts(goal[1]*MM_2_COUNT,"C")    #Y = CH_C
+        
+        # # Feedback loop (while goal is not reached or not timeout)
+        # timer_on = False
+        start_time = time.time()
+        # timeout_time = start_time
+        # position = self.get_position()
+        # while True:
+        #     time.sleep(0.2)
+        #     # Check current position
+        #     prev_position = position
+        #     position = self.get_position()
+        #     err = self.distance_positions(goal, position)
+        #     # Update feedback message
+        #     feedback.x = position[0]
+        #     feedback.y = position[1]
+        #     feedback.z = position[2]
+        #     feedback.error = err
+        #     feedback.time = time.time()-start_time
+        #     goal_handle.publish_feedback(feedback)
+        #     # Check if reached target
+        #     if err <= my_goal.eps:
+        #         goal_handle.succeed()
+        #         result.error_code = 0
+        #         break
+        #     # Check if moving
+        #     else:
+        #         motion = self.distance_positions(position, prev_position)
+        #         if (timer_on is False) and (motion < my_goal.eps):
+        #             timer_on = True         # Set timer
+        #             timeout_time = time.time() 
+        #         elif (timer_on is True) and (motion >= my_goal.eps):
+        #             timer_on = False        # Reset timer
+        #             timeout_time = time.time()
+        #     # Check if timeout:
+        #     if (timer_on is True) and ((time.time()-timeout_time) >= TIMEOUT):
+        #         goal_handle.abort()
+        #         result.error_code = 1   # timeout
+        #         break
 
-        position = self.get_position()
-
-        # Feedback loop (while goal is not reached)
-        feedback = MoveStage.Feedback()
-        while self.distance_to_goal(my_goal, position) < my_goal.eps:
-            feedback.x = position[0]
-            feedback.y = position[1]
-            feedback.z = position[2]
-            goal_handle.publish_feedback(feedback)
-            time.sleep(1)
-            position = self.get_position()
-
-        # Set as successful
+        # Make always success (Temporary)
         goal_handle.succeed()
-        result = MoveStage.Result()
+        position = self.get_position()
+        result.error_code = 0
+
+        # Set result message
         result.x = position[0]
         result.y = position[1]
         result.z = position[2]
+        result.error = self.distance_positions(goal, position)
+        result.time = time.time()-start_time
         return result
 
 ########################################################################

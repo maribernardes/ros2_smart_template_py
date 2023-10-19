@@ -8,19 +8,17 @@ import datetime
 from rclpy.node import Node
 from numpy import loadtxt
 from std_msgs.msg import Int8, Int16
-from geometry_msgs.msg import PoseArray, PoseStamped, PointStamped, Quaternion, Point
+from geometry_msgs.msg import PoseStamped, PointStamped, Quaternion, Point, PoseArray
 from ros2_igtl_bridge.msg import Transform
-from scipy.ndimage import median_filter
-
-INSERTION_STEP = -5.0        # 5mm insertion step
+# from scipy.ndimage import median_filter
 
 class MRITrackingInterface(Node):
 
     def __init__(self):
         super().__init__('mri_tracking_interface')
 
-        #Declare node parameters
-        self.declare_parameter('insertion_length', -100.0) #Insertion length parameter
+        # #Declare node parameters
+        # self.declare_parameter('insertion_length', -100.0) #Insertion length parameter
 
 #### Subscribed topics ###################################################
 
