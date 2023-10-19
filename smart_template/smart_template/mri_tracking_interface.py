@@ -64,7 +64,6 @@ class MRITrackingInterface(Node):
         q_tf = np.quaternion(np.cos(np.deg2rad(45)), np.sin(np.deg2rad(45)), 0, 0)
         zFrameCenter = np.array([0,0,0])
         self.zFrameToRobot = np.concatenate((zFrameCenter, np.array([q_tf.w, q_tf.x, q_tf.y, q_tf.z])))
-
         # Print numpy floats with only 3 decimal places
         np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
 
@@ -73,10 +72,11 @@ class MRITrackingInterface(Node):
     # Get tracked tip pose and convert to robot frame
     def bridge_transform_callback(self, msg):
         name = msg.name      
-        if name=="CurrentTrackedTip": # Needle tip sensor (name is adjusted in PlusServer .xml file)
+        self.get_logger().info('Name = %s' %name)
+        if name=='CurrentTrackedTipZ': # Needle tip sensor (name is adjusted in PlusServer .xml file)
             # Get aurora new reading
-            tip_zFrame = np.array([[msg.transform.translation.x, msg.transform.translation.y, msg.transform.translation.z, \
-                msg.transform.rotation.w, msg.transform.rotation.x, msg.transform.rotation.y, msg.transform.rotation.z]])
+            tip_zFrame = np.array([msg.transform.translation.x, msg.transform.translation.y, msg.transform.translation.z, \
+                msg.transform.rotation.w, msg.transform.rotation.x, msg.transform.rotation.y, msg.transform.rotation.z])
             self.tip = pose_transform(tip_zFrame, self.zFrameToRobot)
 
     # Get current robot pose
@@ -116,8 +116,8 @@ class MRITrackingInterface(Node):
             msg = PoseStamped()
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.header.frame_id = 'stage'
-            msg.pose.position = Point(x=self.Z[0], y=self.Z[1], z=self.Z[2])
-            msg.pose.orientation = Quaternion(w=self.Z[3], x=self.Z[4], y=self.Z[5], z=self.Z[6])
+            msg.pose.position = Point(x=self.tip[0], y=self.tip[1], z=self.tip[2])
+            msg.pose.orientation = Quaternion(w=self.tip[3], x=self.tip[4], y=self.tip[5], z=self.tip[6])
             self.publisher_tip.publish(msg)
             
 ########################################################################
