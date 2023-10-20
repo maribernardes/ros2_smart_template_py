@@ -4,13 +4,11 @@ import numpy as np
 import quaternion
 import datetime
 
-
 from rclpy.node import Node
 from numpy import loadtxt
 from std_msgs.msg import Int8, Int16
 from geometry_msgs.msg import PoseStamped, PointStamped, Quaternion, Point, PoseArray
-from ros2_igtl_bridge.msg import Transform
-# from scipy.ndimage import median_filter
+from ros2_igtl_bridge.msg import Transform, PointArray
 
 class MRITrackingInterface(Node):
 
@@ -26,11 +24,14 @@ class MRITrackingInterface(Node):
         self.subscription_bridge_transform = self.create_subscription(Transform, 'IGTL_TRANSFORM_IN', self.bridge_transform_callback, 10)
         self.subscription_bridge_transform # prevent unused variable warning
 
-        #Topics from robot node (robot)
+        self.subscription_bridge_point = self.create_subscription(PointArray, 'IGTL_POINT_IN', self.bridge_point_callback, 10)
+        self.subscription_bridge_point # prevent unused variable warning
+
+        #Topics from robot node (template)
         self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/guide_pose', self.robot_callback, 10)
         self.subscription_robot # prevent unused variable warning
 
-        #Topic from keypress node
+        #Topic from keypress node (keyboard)
         self.subscription_keyboard = self.create_subscription(Int8, '/keyboard/key', self.keyboard_callback, 10)
         self.subscription_keyboard # prevent unused variable warning
         self.listen_keyboard = False
@@ -47,6 +48,10 @@ class MRITrackingInterface(Node):
         self.timer_tip = self.create_timer(timer_period_tip, self.timer_tip_callback)
         self.publisher_tip = self.create_publisher(PoseStamped, '/needle/state/tip_pose', 10)  #(stage frame)
 
+        # Target (robot frame)
+        timer_period_planning = 1.0  # seconds
+        self.timer_planning = self.create_timer(timer_period_planning, self.timer_planning_callback)   
+        self.publisher_target = self.create_publisher(PointStamped, '/subject/state/target', 10)
 
 #### Stored variables ###################################################
         self.zFrameToRobot = np.empty(shape=[0,7])  # ZFrame to robot frame transform
@@ -73,11 +78,20 @@ class MRITrackingInterface(Node):
     def bridge_transform_callback(self, msg):
         name = msg.name      
         self.get_logger().info('Name = %s' %name)
-        if name=='CurrentTrackedTipZ': # Needle tip sensor (name is adjusted in PlusServer .xml file)
+        if (name == 'CurrentTrackedTipZ'): # Name is adjusted in 3DSlicer module
             # Get aurora new reading
             tip_zFrame = np.array([msg.transform.translation.x, msg.transform.translation.y, msg.transform.translation.z, \
                 msg.transform.rotation.w, msg.transform.rotation.x, msg.transform.rotation.y, msg.transform.rotation.z])
             self.tip = pose_transform(tip_zFrame, self.zFrameToRobot)
+
+    # Get current target point 
+    def bridge_point_callback(self, msg_point):
+        name = msg_point.name      
+        npoints = len(msg_point.pointdata)
+        if (name == 'TARGET') and (npoints == 1): # Name is adjusted in 3DSlicer module
+            target_zFrame = np.array([msg_point.pointdata[0].x, msg_point.pointdata[0].y, msg_point.pointdata[0].z, 1,0,0,0])
+            target_robot = pose_transform(target_zFrame, self.zFrameToRobot)
+            self.target = target_robot[0:3]
 
     # Get current robot pose
     def robot_callback(self, msg_robot):
@@ -119,7 +133,16 @@ class MRITrackingInterface(Node):
             msg.pose.position = Point(x=self.tip[0], y=self.tip[1], z=self.tip[2])
             msg.pose.orientation = Quaternion(w=self.tip[3], x=self.tip[4], y=self.tip[5], z=self.tip[6])
             self.publisher_tip.publish(msg)
-            
+
+    # Publishes target point transformed to robot frame
+    def timer_planning_callback(self):
+        if (self.target.size != 0):
+            msg = PointStamped()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.header.frame_id = 'stage'
+            msg.point = Point(x=self.target[0], y=self.target[1], z=self.target[2])
+            self.publisher_target.publish(msg)
+
 ########################################################################
 
 # Function: pose_transform
@@ -207,7 +230,6 @@ def main(args=None):
     # when the garbage collector destroys the node object)
     system_interface.destroy_node()
     rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()
