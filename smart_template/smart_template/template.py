@@ -78,7 +78,7 @@ class SmartTemplate(Node):
             # TODO: Check the count ratio for each motor. Check channel B direction
             x = float(data[0])*COUNT_2_MM_X# + self.initial_point[0,0] # CHANNEL A
             y = float(data[2])*COUNT_2_MM_Y# + self.initial_point[1,0] # CHANNEL C
-            z =-float(data[1])*COUNT_2_MM_Z# + self.initial_point[2,0] # CHANNEL B
+            z = float(data[1])*COUNT_2_MM_Z# + self.initial_point[2,0] # CHANNEL B
             # self.get_logger().info('x=%f, y=%f, z=%f' %(x, y, z))
             return [x, y, z]
         except:
@@ -140,6 +140,8 @@ class SmartTemplate(Node):
         return CancelResponse.ACCEPT
 
     def check_limits(self,X,Channel):
+        if Channel == "C":
+            return X
         if X > SAFE_LIMIT*MM_2_COUNT_X:
             self.get_logger().info("Limit reach at axis %s" % (Channel))
             X = SAFE_LIMIT*MM_2_COUNT_X
@@ -188,7 +190,7 @@ class SmartTemplate(Node):
         # WARNING: Galil channel B inverted, that is why the my_goal is negative
         # TODO: Check if Channel B is still inverted
         self.send_movement_in_counts(goal[0]*MM_2_COUNT_X,"A")    #X = CH_A
-        self.send_movement_in_counts(-goal[2]*MM_2_COUNT_Z,"B")   #Z = CH_B
+        self.send_movement_in_counts(goal[2]*MM_2_COUNT_Z,"B")   #Z = CH_B
         self.send_movement_in_counts(goal[1]*MM_2_COUNT_Y,"C")    #Y = CH_C
         
         # # Feedback loop (while goal is not reached or not timeout)

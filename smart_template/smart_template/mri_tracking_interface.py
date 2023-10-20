@@ -56,6 +56,7 @@ class MRITrackingInterface(Node):
 #### Stored variables ###################################################
         self.zFrameToRobot = np.empty(shape=[0,7])  # ZFrame to robot frame transform
         self.tip = np.empty(shape=[0,3])            # Tracked tip position (robot frame)
+        self.target = np.empty(shape=[0,3])         # Tracked tip position (robot frame)
         self.stage = np.empty(shape=[0,3])
         self.initial_point = np.empty(shape=[0,3])  # Needle guide position at begining of experiment (robot frame)
 
