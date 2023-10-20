@@ -25,8 +25,14 @@ from std_msgs.msg import Int8
 
 from datetime import datetime
 
-MM_2_COUNT = 1088.9
-COUNT_2_MM = 1.0/1088.9
+MM_2_COUNT_X = 715.0
+COUNT_2_MM_X = 0.0014
+MM_2_COUNT_Y = 2000.0
+COUNT_2_MM_Y = 0.0005
+MM_2_COUNT_Z = 1430.0
+COUNT_2_MM_Z = 0.0007
+
+
 SAFE_LIMIT = 60.0
 
 TIMEOUT = 2             # timeout (sec) for move_stage action server 
@@ -70,9 +76,9 @@ class SmartTemplate(Node):
             # Change self.initial_point is the initial position is not (0,0)
             # WARNING: Galil channel B inverted, that is why the value is negative (NOT SURE IF STILL TRUE)
             # TODO: Check the count ratio for each motor. Check channel B direction
-            x = float(data[0])*COUNT_2_MM# + self.initial_point[0,0] # CHANNEL A
-            y = float(data[2])*COUNT_2_MM# + self.initial_point[1,0] # CHANNEL C
-            z =-float(data[1])*COUNT_2_MM# + self.initial_point[2,0] # CHANNEL B
+            x = float(data[0])*COUNT_2_MM_X# + self.initial_point[0,0] # CHANNEL A
+            y = float(data[2])*COUNT_2_MM_Y# + self.initial_point[1,0] # CHANNEL C
+            z =-float(data[1])*COUNT_2_MM_Z# + self.initial_point[2,0] # CHANNEL B
             # self.get_logger().info('x=%f, y=%f, z=%f' %(x, y, z))
             return [x, y, z]
         except:
@@ -134,12 +140,12 @@ class SmartTemplate(Node):
         return CancelResponse.ACCEPT
 
     def check_limits(self,X,Channel):
-        if X > SAFE_LIMIT*MM_2_COUNT:
+        if X > SAFE_LIMIT*MM_2_COUNT_X:
             self.get_logger().info("Limit reach at axis %s" % (Channel))
-            X = SAFE_LIMIT*MM_2_COUNT
-        elif X < -SAFE_LIMIT*MM_2_COUNT:
+            X = SAFE_LIMIT*MM_2_COUNT_X
+        elif X < -SAFE_LIMIT*MM_2_COUNT_X:
             self.get_logger().info("Limit reach at axis %s" % (Channel))
-            X = -SAFE_LIMIT*MM_2_COUNT
+            X = -SAFE_LIMIT*MM_2_COUNT_X
         return X
 
     def send_movement_in_counts(self,X,Channel):
@@ -181,9 +187,9 @@ class SmartTemplate(Node):
         # Send control inputs
         # WARNING: Galil channel B inverted, that is why the my_goal is negative
         # TODO: Check if Channel B is still inverted
-        self.send_movement_in_counts(goal[0]*MM_2_COUNT,"A")    #X = CH_A
-        self.send_movement_in_counts(-goal[2]*MM_2_COUNT,"B")   #Z = CH_B
-        self.send_movement_in_counts(goal[1]*MM_2_COUNT,"C")    #Y = CH_C
+        self.send_movement_in_counts(goal[0]*MM_2_COUNT_X,"A")    #X = CH_A
+        self.send_movement_in_counts(-goal[2]*MM_2_COUNT_Z,"B")   #Z = CH_B
+        self.send_movement_in_counts(goal[1]*MM_2_COUNT_Y,"C")    #Y = CH_C
         
         # # Feedback loop (while goal is not reached or not timeout)
         # timer_on = False
