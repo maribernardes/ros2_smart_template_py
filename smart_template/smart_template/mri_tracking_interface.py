@@ -47,6 +47,8 @@ class MRITrackingInterface(Node):
         timer_period_tip = 0.3 # seconds
         self.timer_tip = self.create_timer(timer_period_tip, self.timer_tip_callback)
         self.publisher_tip = self.create_publisher(PoseStamped, '/needle/state/tip_pose', 10)  #(stage frame)
+        # Tip (scanner frame)
+        self.publisher_tip_scanner = self.create_publisher(PoseStamped, '/needle/state/tip_mri_pose', 10)  #(scanner frame)
 
         # Target (robot frame)
         timer_period_planning = 1.0  # seconds
@@ -55,7 +57,8 @@ class MRITrackingInterface(Node):
 
 #### Stored variables ###################################################
         self.zFrameToRobot = np.empty(shape=[0,7])  # ZFrame to robot frame transform
-        self.tip = np.empty(shape=[0,3])            # Tracked tip position (robot frame)
+        self.tip = np.empty(shape=[0,7])            # Tracked tip position (robot frame)
+        self.tip_scanner = np.empty(shape=[0,7])    # Tracked tip position (scanner frame)
         self.target = np.empty(shape=[0,3])         # Tracked tip position (robot frame)
         self.stage = np.empty(shape=[0,3])
         self.initial_point = np.empty(shape=[0,3])  # Needle guide position at begining of experiment (robot frame)
@@ -69,7 +72,8 @@ class MRITrackingInterface(Node):
         # Fixed relation from geometry of robot and zFrame attachment
         q_tf = np.quaternion(np.cos(np.deg2rad(45)), np.sin(np.deg2rad(45)), 0, 0)
         zFrameCenter = np.array([0,0,0])
-        self.zFrameToRobot = np.concatenate((zFrameCenter, np.array([q_tf.w, q_tf.x, q_tf.y, q_tf.z])))
+        # self.zFrameToRobot = np.concatenate((zFrameCenter, np.array([q_tf.w, q_tf.x, q_tf.y, q_tf.z])))
+        self.zFrameToRobot = np.concatenate((zFrameCenter, np.array([1, 0, 0, 0])))
         # Print numpy floats with only 3 decimal places
         np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
 
@@ -80,10 +84,14 @@ class MRITrackingInterface(Node):
         name = msg.name      
         self.get_logger().info('Name = %s' %name)
         if (name == 'CurrentTrackedTipZ'): # Name is adjusted in 3DSlicer module
-            # Get aurora new reading
             tip_zFrame = np.array([msg.transform.translation.x, msg.transform.translation.y, msg.transform.translation.z, \
                 msg.transform.rotation.w, msg.transform.rotation.x, msg.transform.rotation.y, msg.transform.rotation.z])
             self.tip = pose_transform(tip_zFrame, self.zFrameToRobot)
+            self.get_logger().info('Tip = %s' %(self.tip)) 
+        if (name == 'CurrentTrackedTipTransform'): # Name is adjusted in 3DSlicer module
+            self.tip_scanner = np.array([msg.transform.translation.x, msg.transform.translation.y, msg.transform.translation.z, \
+                msg.transform.rotation.w, msg.transform.rotation.x, msg.transform.rotation.y, msg.transform.rotation.z])
+            self.get_logger().info('Tip Scanner = %s' %(self.tip_scanner)) 
 
     # Get current target point 
     def bridge_point_callback(self, msg_point):
@@ -93,6 +101,7 @@ class MRITrackingInterface(Node):
             target_zFrame = np.array([msg_point.pointdata[0].x, msg_point.pointdata[0].y, msg_point.pointdata[0].z, 1,0,0,0])
             target_robot = pose_transform(target_zFrame, self.zFrameToRobot)
             self.target = target_robot[0:3]
+            self.get_logger().info('Target = %s' %(self.target)) 
 
     # Get current robot pose
     def robot_callback(self, msg_robot):
@@ -134,6 +143,13 @@ class MRITrackingInterface(Node):
             msg.pose.position = Point(x=self.tip[0], y=self.tip[1], z=self.tip[2])
             msg.pose.orientation = Quaternion(w=self.tip[3], x=self.tip[4], y=self.tip[5], z=self.tip[6])
             self.publisher_tip.publish(msg)
+        if (self.tip_scanner.size != 0):
+            msg = PoseStamped()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.header.frame_id = 'scanner'
+            msg.pose.position = Point(x=self.tip_scanner[0], y=self.tip_scanner[1], z=self.tip_scanner[2])
+            msg.pose.orientation = Quaternion(w=self.tip_scanner[3], x=self.tip_scanner[4], y=self.tip_scanner[5], z=self.tip_scanner[6])
+            self.publisher_tip_scanner.publish(msg)
 
     # Publishes target point transformed to robot frame
     def timer_planning_callback(self):
