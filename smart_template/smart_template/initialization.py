@@ -20,7 +20,7 @@ from ros2_igtl_bridge.msg import PointArray, String
 #
 # Subscribes:   
 # '/keyboard/key'           (std_msgs.msg.Int8)
-# '/stage/state/pose'       (geometry_msgs.msg.PoseStamped)  - robot frame
+# '/stage/state/guide_pose' (geometry_msgs.msg.PoseStamped)  - robot frame
 #
 # Publishes:    
 # '/stage/initial_point'    (geometry_msgs.msg.PointStamped) - robot frame
@@ -35,7 +35,7 @@ class Initialization(Node):
 #### Subscribed topics ###################################################
 
         #Topics from robot node
-        self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/pose', self.robot_callback, 10)
+        self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/guide_pose', self.robot_callback, 10)
         self.subscription_robot # prevent unused variable warning
 
         #Topic from keypress node
@@ -55,7 +55,7 @@ class Initialization(Node):
         self.stage = np.empty(shape=[0,2])          # Stage positions: horizontal / vertical (robot frame)
         self.listen_keyboard = False                # Flag for waiting keyboard input (set robot initial position)
 
-#### Interface initialization ###################################################
+#### Node initialization ###################################################
 
         # Print numpy floats with only 3 decimal places
         np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
@@ -76,6 +76,12 @@ class Initialization(Node):
                 # Initialize robot
                 self.initial_point = self.stage
                 self.get_logger().debug('Initial robot position: %s' %(self.initial_point)) 
+                # Publishes immediately
+                msg = PointStamped()
+                msg.header.stamp = self.get_clock().now().to_msg()
+                msg.header.frame_id = 'stage'
+                msg.point = Point(x=self.initial_point[0], y=self.initial_point[1], z=self.initial_point[2])
+                self.publisher_initial_point.publish(msg)
 
 #### Publishing callbacks ###################################################
             
