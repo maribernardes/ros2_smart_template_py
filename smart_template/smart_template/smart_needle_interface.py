@@ -23,7 +23,7 @@ from ros2_igtl_bridge.msg import PointArray, String
 #
 # Subscribes:   
 # '/needle/state/current_shape' (geometry_msgs.msg.PoseArray)    - needle frame
-# '/stage/state/pose'           (geometry_msgs.msg.PoseStamped)  - robot frame
+# '/stage/state/guide_pose'     (geometry_msgs.msg.PoseStamped)  - robot frame
 # '/stage/initial_point'        (geometry_msgs.msg.PointStamped) - robot frame
 #
 # Publishes:    
@@ -50,7 +50,7 @@ class SmartNeedleInterface(Node):
         self.subscription_sensor # prevent unused variable warning
 
         #Topics from robot node
-        self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/pose', self.robot_callback, 10)
+        self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/guide_pose', self.robot_callback, 10)
         self.subscription_robot # prevent unused variable warning
 
         # Topics from keyboard interface node (robot initialization)
