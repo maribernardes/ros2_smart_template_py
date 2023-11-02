@@ -21,9 +21,10 @@ setup(
     entry_points={
         'console_scripts': [
             'template = smart_template.template:main',
+            'virtual_template = smart_template.virtual_template:main',
             'keypress = smart_template.keypress:main',
-            'initialization = smart_template.initialization:main'
-            'smart_needle_interface = smart_template.smart_needle_interface:main'
+            'initialization = smart_template.initialization:main',
+            'smart_needle_interface = smart_template.smart_needle_interface:main',
             'mri_tracking_interface = smart_template.mri_tracking_interface:main'
         ],
     },
