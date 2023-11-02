@@ -10,22 +10,37 @@ from std_msgs.msg import Int8, Int16
 from geometry_msgs.msg import PoseStamped, PointStamped, Quaternion, Point, PoseArray
 from ros2_igtl_bridge.msg import Transform, PointArray
 
+#########################################################################
+#
+# MRI Tracking Interface Node
+#
+# This node gets current needle tip pose from 3DSlicer and converts
+# it to robot frame. It also gets robot current position and extracts the
+# needle base pose in needle frame.
+#
+# Subscribes:   
+# 'IGTL_TRANSFORM_IN'           (ros2_igtl_bridge.msg.Transform) - zFrame           name: CurrentTrackedTipZ
+# 'IGTL_TRANSFORM_IN'           (ros2_igtl_bridge.msg.Transform) - scanner frame    name: CurrentTrackedTipTransform
+# '/stage/state/pose'           (geometry_msgs.msg.PoseStamped)  - robot frame
+# '/stage/initial_point'        (geometry_msgs.msg.PointStamped) - robot frame
+#
+# Publishes:    
+# '/needle/state/tip_mri_pose'  (geometry_msgs.msg.PoseStamped)   - scanner frame
+# '/sensor/tip'                 (geometry_msgs.msg.PoseStamped)   - robot frame
+# '/sensor/base'                (geometry_msgs.msg.PoseStamped)   - robot frame
+# 
+#########################################################################
+
 class MRITrackingInterface(Node):
 
     def __init__(self):
         super().__init__('mri_tracking_interface')
-
-        # #Declare node parameters
-        # self.declare_parameter('insertion_length', -100.0) #Insertion length parameter
 
 #### Subscribed topics ###################################################
 
         #Topics from 3D Slicer interface (OpenIGTLink Bridge)
         self.subscription_bridge_transform = self.create_subscription(Transform, 'IGTL_TRANSFORM_IN', self.bridge_transform_callback, 10)
         self.subscription_bridge_transform # prevent unused variable warning
-
-        self.subscription_bridge_point = self.create_subscription(PointArray, 'IGTL_POINT_IN', self.bridge_point_callback, 10)
-        self.subscription_bridge_point # prevent unused variable warning
 
         #Topics from robot node (template)
         self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/guide_pose', self.robot_callback, 10)
@@ -38,33 +53,29 @@ class MRITrackingInterface(Node):
 
 #### Published topics ###################################################
 
-        # Experiment initial robot position (robot frame)
-        timer_period_initialize = 1.0  # seconds
-        self.timer_initialize = self.create_timer(timer_period_initialize, self.timer_initialize_callback)        
-        self.publisher_initial_point = self.create_publisher(PointStamped, '/stage/initial_point', 10)
+        # TODO: Adjust names '/sensor/tip' and '/sensor/base'
+
+        # Tip (scanner frame)
+        self.publisher_tip_scanner = self.create_publisher(PoseStamped, '/needle/state/tip_mri_pose', 10)  #(scanner frame)
 
         # Tip (robot frame)
         timer_period_tip = 0.3 # seconds
         self.timer_tip = self.create_timer(timer_period_tip, self.timer_tip_callback)
-        self.publisher_tip = self.create_publisher(PoseStamped, '/needle/state/tip_pose', 10)  #(stage frame)
-        # Tip (scanner frame)
-        self.publisher_tip_scanner = self.create_publisher(PoseStamped, '/needle/state/tip_mri_pose', 10)  #(scanner frame)
+        self.publisher_tip = self.create_publisher(PoseStamped, '/sensor/tip', 10)  #(stage frame)
 
-        # Target (robot frame)
-        timer_period_planning = 1.0  # seconds
-        self.timer_planning = self.create_timer(timer_period_planning, self.timer_planning_callback)   
-        self.publisher_target = self.create_publisher(PointStamped, '/subject/state/target', 10)
+        # Base (robot frame)
+        timer_period_base = 0.3 # seconds
+        self.timer_base = self.create_timer(timer_period_base, self.timer_base_callback)
+        self.publisher_base = self.create_publisher(PoseStamped,'/sensor/base', 10) #(stage frame)      
 
 #### Stored variables ###################################################
-        self.zFrameToRobot = np.empty(shape=[0,7])  # ZFrame to robot frame transform
-        self.tip = np.empty(shape=[0,7])            # Tracked tip position (robot frame)
-        self.tip_scanner = np.empty(shape=[0,7])    # Tracked tip position (scanner frame)
-        self.target = np.empty(shape=[0,3])         # Tracked tip position (robot frame)
-        self.stage = np.empty(shape=[0,3])
-        self.initial_point = np.empty(shape=[0,3])  # Needle guide position at begining of experiment (robot frame)
 
-        # Flags
-        self.initialize_insertion = False           # Flag to initialize the experiment (record initial guide position and following steps)
+        self.zFrameToRobot = np.empty(shape=[0,7])  # ZFrame to robot frame transform
+        self.tip_scanner = np.empty(shape=[0,7])    # Tracked tip position (scanner frame)
+        self.Z = np.empty(shape=[0,7])            # Tracked tip position (robot frame)
+        self.initial_point = np.empty(shape=[0,3])  # Needle guide position at begining of experiment (robot frame)
+        self.stage = np.empty(shape=[0,3])          # Robot current position (robot frame)
+        self.X = np.empty(shape=[0,7])              # Base pose (robot frame)
 
 #### Interface initialization ###################################################
 
@@ -72,12 +83,24 @@ class MRITrackingInterface(Node):
         # Fixed relation from geometry of robot and zFrame attachment
         q_tf = np.quaternion(np.cos(np.deg2rad(45)), np.sin(np.deg2rad(45)), 0, 0)
         zFrameCenter = np.array([0,0,0])
-        # self.zFrameToRobot = np.concatenate((zFrameCenter, np.array([q_tf.w, q_tf.x, q_tf.y, q_tf.z])))
-        self.zFrameToRobot = np.concatenate((zFrameCenter, np.array([1, 0, 0, 0])))
+        self.zFrameToRobot = np.concatenate((zFrameCenter, np.array([q_tf.w, q_tf.x, q_tf.y, q_tf.z])))
+        
         # Print numpy floats with only 3 decimal places
         np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
 
 #### Listening callbacks ###################################################
+
+    # Get initial robot pose
+    def initial_point_callback(self, msg_robot):
+        if (self.initial_point.size == 0): # Do it only once
+            robot = msg_robot.pose
+            # Set initial point
+            self.initial_point = np.array([robot.position.x, robot.position.y, robot.position.z])
+            q_tf1= np.quaternion(np.cos(np.deg2rad(45)), np.sin(np.deg2rad(45)), 0, 0)
+            q_tf2= np.quaternion(np.cos(np.deg2rad(45)), 0, 0, np.sin(np.deg2rad(45)))
+            q_tf = q_tf1*q_tf2   
+            # Set needleToRobot transform         
+            self.needleToRobot = np.concatenate((self.initial_point[0:3], np.array([q_tf.w, q_tf.x, q_tf.y, q_tf.z]))) # Registration now comes from entry point
 
     # Get tracked tip pose and convert to robot frame
     def bridge_transform_callback(self, msg):
@@ -93,56 +116,20 @@ class MRITrackingInterface(Node):
                 msg.transform.rotation.w, msg.transform.rotation.x, msg.transform.rotation.y, msg.transform.rotation.z])
             self.get_logger().info('Tip Scanner = %s' %(self.tip_scanner)) 
 
-    # Get current target point 
-    def bridge_point_callback(self, msg_point):
-        name = msg_point.name      
-        npoints = len(msg_point.pointdata)
-        if (name == 'TARGET') and (npoints == 1): # Name is adjusted in 3DSlicer module
-            target_zFrame = np.array([msg_point.pointdata[0].x, msg_point.pointdata[0].y, msg_point.pointdata[0].z, 1,0,0,0])
-            target_robot = pose_transform(target_zFrame, self.zFrameToRobot)
-            self.target = target_robot[0:3]
-            self.get_logger().info('Target = %s' %(self.target)) 
-
     # Get current robot pose
     def robot_callback(self, msg_robot):
         robot = msg_robot.pose
         self.stage = np.array([robot.position.x, robot.position.y, robot.position.z])
-        if (self.initialize_insertion is True):
-            self.initial_point = np.array([robot.position.x, robot.position.y, robot.position.z])
-            self.get_logger().debug('Initial stage position in (%f, %f, %f)' %(self.initial_point[0], self.initial_point[1], self.initial_point[2])) 
-            self.initialize_insertion = False
-
-    # A keyboard hotkey was pressed 
-    def keyboard_callback(self, msg):
-        if (self.stage.size == 0):
-            self.get_logger().info('Wait. Robot is not publishing')
-        elif (self.listen_keyboard == True) : # If listerning to keyboard
-            if (self.initial_point.size == 0) and (msg.data == 32):  # SPACE: initialize stage initial point and initial depth
-                self.initialize_insertion = True
+        # Store current needle base pose (in robot and needle frames)
+        if (self.needleToRobot.size != 0):
+            needle_q = self.needleToRobot[3:7]
+            self.X = np.array([self.stage[0], self.stage[1], self.stage[2], needle_q[0], needle_q[1], needle_q[2], needle_q[3]]) #base in robot frame       
+            self.needle_pose = pose_inv_transform(self.X, self.needleToRobot)   # base in needle frame
 
 #### Publishing callbacks ###################################################
-            
-    # Publishes initial point
-    def timer_initialize_callback(self):
-        # Publishes only after experiment started (stored initial point is available)
-        if (self.initial_point.size != 0):
-            msg = PointStamped()
-            msg.header.stamp = self.get_clock().now().to_msg()
-            msg.header.frame_id = 'stage'
-            # Publish robot initial point (robot frame)
-            msg.point = Point(x=self.initial_point[0], y=self.initial_point[1], z=self.initial_point[2])
-            self.publisher_initial_point.publish(msg)
 
-    # Publishes needle tip transformed to robot frame
+    # Publishes needle tip in scanner frame and robot frame
     def timer_tip_callback (self):
-        # Publish last needle pose in robot frame
-        if (self.tip.size != 0):
-            msg = PoseStamped()
-            msg.header.stamp = self.get_clock().now().to_msg()
-            msg.header.frame_id = 'stage'
-            msg.pose.position = Point(x=self.tip[0], y=self.tip[1], z=self.tip[2])
-            msg.pose.orientation = Quaternion(w=self.tip[3], x=self.tip[4], y=self.tip[5], z=self.tip[6])
-            self.publisher_tip.publish(msg)
         if (self.tip_scanner.size != 0):
             msg = PoseStamped()
             msg.header.stamp = self.get_clock().now().to_msg()
@@ -150,15 +137,24 @@ class MRITrackingInterface(Node):
             msg.pose.position = Point(x=self.tip_scanner[0], y=self.tip_scanner[1], z=self.tip_scanner[2])
             msg.pose.orientation = Quaternion(w=self.tip_scanner[3], x=self.tip_scanner[4], y=self.tip_scanner[5], z=self.tip_scanner[6])
             self.publisher_tip_scanner.publish(msg)
-
-    # Publishes target point transformed to robot frame
-    def timer_planning_callback(self):
-        if (self.target.size != 0):
-            msg = PointStamped()
+        if (self.Z.size != 0):
+            msg = PoseStamped()
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.header.frame_id = 'stage'
-            msg.point = Point(x=self.target[0], y=self.target[1], z=self.target[2])
-            self.publisher_target.publish(msg)
+            msg.pose.position = Point(x=self.Z[0], y=self.Z[1], z=self.Z[2])
+            msg.pose.orientation = Quaternion(w=self.Z[3], x=self.Z[4], y=self.Z[5], z=self.Z[6])
+            self.publisher_tip.publish(msg)
+
+    # Publishes needle base transformed to robot frame
+    def timer_base_callback (self):
+        # Publish last needle pose in robot frame
+        if (self.X.size != 0):
+            msg = PoseStamped()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.header.frame_id = 'stage'
+            msg.pose.position = Point(x=self.X[0], y=self.X[1], z=self.X[2])
+            msg.pose.orientation = Quaternion(w=self.X[3], x=self.X[4], y=self.X[5], z=self.X[6])
+            self.publisher_base.publish(msg)
 
 ########################################################################
 
@@ -216,36 +212,13 @@ def pose_inv_transform(x_orig, x_tf):
 def main(args=None):
     rclpy.init(args=args)
 
-    system_interface = MRITrackingInterface()
-    system_interface.get_logger().info('Waiting for stage...')
-
-    # Wait for stage and sensor to start publishing
-    while rclpy.ok():
-        rclpy.spin_once(system_interface)
-        if(system_interface.stage.size == 0):
-            pass
-        else:
-            system_interface.get_logger().info('Stage connected. Now place the needle at the Entry Point')
-            system_interface.get_logger().info('REMEMBER: Use another terminal to run keypress node')
-            system_interface.get_logger().info('**** To initialize experiment, place needle at initial position and hit SPACE ****')
-            system_interface.listen_keyboard = True
-            break
-
-    # Initialize insertion
-    while rclpy.ok():
-        rclpy.spin_once(system_interface)
-        if system_interface.initial_point.size == 0: # Not initialized yet
-            pass
-        else:
-            system_interface.get_logger().info('*****START NEEDLE INSERTION*****')
-            break
-
-    rclpy.spin(system_interface)
+    mritracking_interface = MRITrackingInterface()
+    rclpy.spin(mritracking_interface)
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
     # when the garbage collector destroys the node object)
-    system_interface.destroy_node()
+    mritracking_interface.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':
