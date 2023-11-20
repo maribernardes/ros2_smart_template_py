@@ -23,7 +23,7 @@ from ros2_igtl_bridge.msg import PointArray, String
 # '/stage/state/guide_pose' (geometry_msgs.msg.PoseStamped)  - robot frame
 #
 # Publishes:    
-# '/stage/initial_point'    (geometry_msgs.msg.PointStamped) - robot frame
+# '/stage/initial_point'    (geometry_msgs.msg.PoseStamped) - robot frame
 #
 #########################################################################
 
@@ -47,12 +47,13 @@ class Initialization(Node):
         # Experiment initial robot position (robot frame)
         timer_period_initialize = 3.0  # seconds
         self.timer_initialize = self.create_timer(timer_period_initialize, self.timer_initialize_callback)        
-        self.publisher_initial_point = self.create_publisher(PointStamped, '/stage/initial_point', 10)
+        self.publisher_initial_point = self.create_publisher(PoseStamped, '/stage/initial_point', 10)
+
 
 #### Stored variables ###################################################
         
-        self.initial_point = np.empty(shape=[0,3])  # Stage position at begining of experiment
-        self.stage = np.empty(shape=[0,2])          # Stage positions: horizontal / vertical (robot frame)
+        self.initial_point = np.empty(shape=[0,7])  # Stage position at begining of experiment
+        self.stage = np.empty(shape=[0,7])          # Stage positions: horizontal / depth / vertical 
         self.listen_keyboard = False                # Flag for waiting keyboard input (set robot initial position)
 
 #### Node initialization ###################################################
@@ -65,7 +66,8 @@ class Initialization(Node):
     # Get current robot pose
     def robot_callback(self, msg_robot):
         robot = msg_robot.pose
-        self.stage = np.array([robot.position.x, robot.position.y, robot.position.z])
+        self.stage = np.array([robot.position.x, robot.position.y, robot.position.z, 
+                               robot.orientation.w, robot.orientation.x, robot.orientation.y, robot.orientation.z])
 
     # A keyboard hotkey was pressed 
     def keyboard_callback(self, msg):
@@ -77,10 +79,11 @@ class Initialization(Node):
                 self.initial_point = self.stage
                 self.get_logger().debug('Initial robot position: %s' %(self.initial_point)) 
                 # Publishes immediately
-                msg = PointStamped()
+                msg = PoseStamped()
                 msg.header.stamp = self.get_clock().now().to_msg()
                 msg.header.frame_id = 'stage'
-                msg.point = Point(x=self.initial_point[0], y=self.initial_point[1], z=self.initial_point[2])
+                msg.pose.position = Point(x=self.initial_point[0], y=self.initial_point[1], z=self.initial_point[2])
+                msg.pose.orientation = Quaternion(w=self.initial_point[3], x=self.initial_point[4], y=self.initial_point[5], z=self.initial_point[6])
                 self.publisher_initial_point.publish(msg)
 
 #### Publishing callbacks ###################################################
@@ -89,11 +92,12 @@ class Initialization(Node):
     def timer_initialize_callback(self):
         # Publishes only after experiment started (stored initial point is available)
         if (self.initial_point.size != 0):
-            msg = PointStamped()
+            msg = PoseStamped()
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.header.frame_id = 'stage'
             # Publish robot initial point (robot frame)
-            msg.point = Point(x=self.initial_point[0], y=self.initial_point[1], z=self.initial_point[2])
+            msg.pose.position = Point(x=self.initial_point[0], y=self.initial_point[1], z=self.initial_point[2])
+            msg.pose.orientation = Quaternion(w=self.initial_point[3], x=self.initial_point[4], y=self.initial_point[5], z=self.initial_point[6])
             self.publisher_initial_point.publish(msg)
 
 ########################################################################
@@ -110,9 +114,9 @@ def main(args=None):
         if(initialization.stage.size == 0): # Robot has not published yet (wait for it to connect)
             pass
         else:
-            initialization.get_logger().info('Robot is connected. Now place the needle at the Entry Point')
-            initialization.get_logger().info('REMEMBER: Use another terminal to run keypress node')
+            initialization.get_logger().info('Robot is connected. ')
             initialization.get_logger().info('**** To initialize experiment, place needle at initial position and hit SPACE ****')
+            initialization.get_logger().info('REMEMBER: Use another terminal to run keypress node')
             initialization.listen_keyboard = True
             break
 
@@ -122,7 +126,7 @@ def main(args=None):
         if initialization.initial_point.size == 0: # Not initialized yet
             pass
         else:
-            initialization.get_logger().info('*****START NEEDLE INSERTION*****')
+            initialization.get_logger().info('***** Initialization Sucessfull *****')
             break
 
     rclpy.spin(initialization)

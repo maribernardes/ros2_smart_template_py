@@ -25,13 +25,15 @@ from std_msgs.msg import Int8
 
 from datetime import datetime
 
-MM_2_COUNT_X = 715.0
+# Horizontal
+MM_2_COUNT_X = 715.0  
 COUNT_2_MM_X = 0.0014
-MM_2_COUNT_Y = 2000.0
+# Depth
+MM_2_COUNT_Y = 2000.0 
 COUNT_2_MM_Y = 0.0005
-MM_2_COUNT_Z = 1430.0
+# Vertical
+MM_2_COUNT_Z = 1430.0 
 COUNT_2_MM_Z = 0.0007
-
 
 SAFE_LIMIT = 60.0
 
@@ -120,7 +122,7 @@ class SmartTemplate(Node):
             self.get_logger().info('Needle guide at initial position')
 
             # Store initial point
-            initial_point = msg.point
+            initial_point = msg.pose
             self.initial_point = np.array([initial_point.position.x, initial_point.position.y, initial_point.position.z])
 
     # Destroy de action server

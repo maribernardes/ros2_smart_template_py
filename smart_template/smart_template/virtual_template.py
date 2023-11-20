@@ -25,9 +25,9 @@ from std_msgs.msg import Int8
 
 from datetime import datetime
 
-HOME_X = 0.0
-HOME_Y = 0.0
-HOME_Z = 0.0
+HOME_X = 1.0
+HOME_Y = 1.0
+HOME_Z = 1.0
 
 STEP_X = 0.05
 STEP_Y = 0.1
@@ -44,15 +44,15 @@ class VirtualSmartTemplate(Node):
 
 #### Subscribed topics ###################################################
 
-        # Topic from initialization node
-        self.subscription_initial_point = self.create_subscription(PoseStamped, '/stage/initial_point', self.initial_point_callback, 10)
-        self.subscription_initial_point  # prevent unused variable warning
+        # # Topic from initialization node
+        # self.subscription_initial_point = self.create_subscription(PoseStamped, '/stage/initial_point', self.initial_point_callback, 10)
+        # self.subscription_initial_point  # prevent unused variable warning
 
 #### Published topics ###################################################
 
         # Current position
-        timer_period = 0.2  # seconds
-        self.timer = self.create_timer(timer_period, self.timer_stage_pose_callback)
+        timer_period_stage = 0.3  # seconds
+        self.timer_stage = self.create_timer(timer_period_stage, self.timer_stage_pose_callback)
         self.publisher_stage_pose = self.create_publisher(PoseStamped, '/stage/state/guide_pose', 10)
 
 #### Action server ###################################################
@@ -77,12 +77,12 @@ class VirtualSmartTemplate(Node):
 
 #### Listening callbacks ###################################################
 
-    # Initialization after needle is positioned in the initial point (after SPACE hit)
-    def initial_point_callback(self, msg):
-        if (self.initial_point.size == 0):  # Do only once
-            # Store initial point
-            initial_point = msg.point
-            self.initial_point = np.array([initial_point.position.x, initial_point.position.y, initial_point.position.z])
+    # # Initialization after needle is positioned in the initial point (after SPACE hit)
+    # def initial_point_callback(self, msg):
+    #     if (self.initial_point.size == 0):  # Do only once
+    #         # Store initial point
+    #         initial_point = msg.pose
+    #         self.initial_point = np.array([initial_point.position.x, initial_point.position.y, initial_point.position.z])
 
 #### Publishing callbacks ###################################################
 
@@ -97,8 +97,9 @@ class VirtualSmartTemplate(Node):
         msg.pose.position.x = position[0]
         msg.pose.position.y = position[1]
         msg.pose.position.z = position[2]
-        msg.pose.orientation = Quaternion(w=float(1), x=float(0), y=float(0), z=float(0))
+        msg.pose.orientation = Quaternion(w=1.0, x=0.0, y=0.0, z=0.0)
         self.publisher_stage_pose.publish(msg)
+
 
 #### Internal functions ###################################################
 
@@ -216,13 +217,13 @@ class VirtualSmartTemplate(Node):
 
 ########################################################################
 
-def main():
-    rclpy.init()
-    virtual_template = VirtualSmartTemplate()
-    # Use a MultiThreadedExecutor to enable processing goals concurrently
-    executor = MultiThreadedExecutor()
+def main(args=None):
 
-    rclpy.spin(virtual_template, executor=executor)
+    rclpy.init(args=args)
+
+    virtual_template = VirtualSmartTemplate()
+
+    rclpy.spin(virtual_template)
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
