@@ -198,6 +198,7 @@ class SmartTemplate(Node):
         # # Feedback loop (while goal is not reached or not timeout)
         # timer_on = False
         start_time = time.time()
+        # TODO: Do we need this? Will it be useful?
         # timeout_time = start_time
         # position = self.get_position()
         # while True:
@@ -233,7 +234,7 @@ class SmartTemplate(Node):
         #         result.error_code = 1   # timeout
         #         break
 
-        # Make always success (Temporary)
+        # Make always success (Temporary solution for now)
         goal_handle.succeed()
         position = self.get_position()
         result.error_code = 0

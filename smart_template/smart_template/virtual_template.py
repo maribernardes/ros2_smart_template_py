@@ -25,9 +25,9 @@ from std_msgs.msg import Int8
 
 from datetime import datetime
 
-HOME_X = 1.0
-HOME_Y = 1.0
-HOME_Z = 1.0
+HOME_X = 0.0
+HOME_Y = 0.0
+HOME_Z = 0.0
 
 STEP_X = 0.05
 STEP_Y = 0.1
