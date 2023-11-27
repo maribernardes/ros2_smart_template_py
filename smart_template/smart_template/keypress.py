@@ -20,13 +20,27 @@ class Keypress(Node):
         if (k==10) or (k==32) or (k==50) or (k==52) or (k==54) or (k==56):
             msg = Int8()
             msg.data = k
+            key=''
+            if (k==10):
+                key='ENTER'
+            elif (k==32):
+                key='SPACE'
+            elif (k==50):
+                key='DOWN'
+            elif (k==52):
+                key='LEFT'
+            elif (k==54):
+                key='RIGHT'
+            elif (k==56):
+                key='UP'
             self.publisher.publish(msg)
-            self.get_logger().info('Pressed %s' %(k))
+            self.get_logger().info('Pressed %s' %(key))
 
 def main(args=None):
     rclpy.init(args=args)
 
     keypress = Keypress()
+    keypress.get_logger().info('***** Listening to keyboard *****')
 
     rclpy.spin(keypress)
 
