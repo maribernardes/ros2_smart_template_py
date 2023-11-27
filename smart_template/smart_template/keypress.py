@@ -40,7 +40,7 @@ def main(args=None):
     rclpy.init(args=args)
 
     keypress = Keypress()
-    keypress.get_logger().info('***** Listening to keyboard *****')
+    keypress.get_logger().info('*** Keyboard User Interface ***')
 
     rclpy.spin(keypress)
 
