@@ -47,8 +47,8 @@ This repository contains:
 
 ### Network connection
 - Setup the computer network to:
-  * IP:
-  * Subnet mask:
+  * IP: 192.168.0.9
+  * Subnet mask: 255.255.255.0
  
 - Galil commands using gclib:
   * galil = gclib.py() #create communication 
