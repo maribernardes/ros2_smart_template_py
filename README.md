@@ -18,20 +18,23 @@ This repository contains:
 
 - The template node exposes the /move_stage action which takes a /stage_control_interfaces/action/MoveStage action message of the format:
   
-*float64 x 
-*float64 z 
-*float64 eps 
-*--- 
-*float64 x 
-*float64 z 
-*float64 time 
-*float64 error 
-*int32 error_code 
-*---
-*float64 x
-*float64 z
-*float64 error
-*float64 time
+* float64 x
+* float64 y
+* float64 z
+* float64 eps
+* 
+* float64 x
+* float64 y
+* float64 z
+* float64 time
+* float64 error
+* int32 error_code
+* 
+* float64 x
+* float64 y
+* float64 z
+* float64 error
+* float64 time
 
 
 ## Usage <a name="usage"></a>
