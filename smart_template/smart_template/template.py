@@ -13,11 +13,12 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from smart_control_interfaces.action import MoveStage
+from smart_control_interfaces.srv import ControllerCommand
 from ros2_igtl_bridge.msg import Transform
 from numpy import asarray, savetxt, loadtxt
 from scipy.ndimage import median_filter
 
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PointStamped
 from geometry_msgs.msg import Quaternion
 from transforms3d.euler import euler2quat
 from scipy.io import loadmat
@@ -39,38 +40,62 @@ SAFE_LIMIT = 60.0
 
 TIMEOUT = 2             # timeout (sec) for move_stage action server 
 
+
+#########################################################################
+#
+# Template
+#
+# Description:
+# This node runs the SmartTemplate communication with Galil and implement
+# the robot service and action servers
+#
+# Subscribes:   
+# '/stage/state/guide_pose'     (geometry_msgs.msg.PointStamped)  - robot frame
+#
+# Action/service clients:
+# '/move_stage' (smart_control_interfaces.action.MoveStage) - robot frame
+# '/command'    (smart_control_interfaces.srv.ControllerCommand) - robot frame
+# 
+#########################################################################
+
+
 class SmartTemplate(Node):
 
     def __init__(self):
         super().__init__('smart_template')      
 
-        #Topics from sensor processing node
-        self.subscription_initial_point = self.create_subscription(PoseStamped, '/stage/initial_point', self.initial_point_callback, 10)
-        self.subscription_initial_point  # prevent unused variable warning
+#### Published topics ###################################################
 
-        #Published topics
         timer_period = 0.2  # seconds
         self.timer = self.create_timer(timer_period, self.timer_stage_pose_callback)
-        self.publisher_stage_pose = self.create_publisher(PoseStamped, '/stage/state/guide_pose', 10)
+        self.publisher_stage_pose = self.create_publisher(PointStamped, '/stage/state/guide_pose', 10)
 
-        #Action server
+#### Action/Service server ##############################################
+       
         self._action_server = ActionServer(self, MoveStage, '/move_stage', execute_callback=self.execute_callback,\
             callback_group=ReentrantCallbackGroup(), goal_callback=self.goal_callback, cancel_callback=self.cancel_callback)
+        self.srv = self.create_service(ControllerCommand, '/command', self.command_callback)
 
-        #Start serial communication
+#### Node initialization ###################################################
+
+        # Start serial communication
         self.galil = gclib.py()
         self.galil.GOpen('192.168.0.99')
-        #Initial position is always (0,0)
+        # Initial position is always set to (0,0,0)
         self.galil.GCommand('DPA=0')
         self.galil.GCommand('DPB=0')
         self.galil.GCommand('DPC=0')
         self.galil.GCommand('PTA=1')
         self.galil.GCommand('PTB=1')
         self.galil.GCommand('PTC=1')
+        # # TODO: Do we need to this part that is in the code for homing?
+        # self.ser.write(str.encode("SH;")) #Check this code
+        # self.AbsoluteMode = True
 
-        #Stored values
-        self.initial_point = np.empty(shape=[0,3])  # Initial point (at the begining of experiment)
 
+#### Internal functions ###################################################
+
+    # Get current robot position
     def get_position(self):
         try:
             data_temp = self.galil.GCommand('TP')
@@ -86,24 +111,9 @@ class SmartTemplate(Node):
         except:
             return "error TP"
 
-    # Timer to publish '/stage/state/pose'  
-    def timer_stage_pose_callback(self):
-        # Read guide position from robot motors
-        position = self.get_position()
-        # Construct robot message to publish             
-        msg = PoseStamped()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = "stage"
-        msg.pose.position.x = position[0]
-        msg.pose.position.y = position[1]
-        msg.pose.position.z = position[2]
-        msg.pose.orientation = Quaternion(w=float(1), x=float(0), y=float(0), z=float(0))
-        self.publisher_stage_pose.publish(msg)
-        self.get_logger().debug('stage_pose: x=%f, y=%f, z=%f, q=[%f, %f, %f, %f] in %s frame'  % (msg.pose.position.x, msg.pose.position.y, \
-                msg.pose.position.z,  msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.header.frame_id))
-
-    # Initialization after needle is positioned in the initial point (after SPACE hit)
-    def initial_point_callback(self, msg):
+    # Sends robot to home (initial) position
+    # TODO: Confirm with Pedro what is the difference between this and send_movement([0,0,0])
+    def homing(self):
         if (self.initial_point.size == 0):  # Do only once
             self.ser.write(str.encode("DPA=0;"))
             time.sleep(0.02)
@@ -119,11 +129,88 @@ class SmartTemplate(Node):
             time.sleep(0.02)
             self.ser.write(str.encode("SH;")) #Check this code
             self.AbsoluteMode = True
-            self.get_logger().info('Needle guide at initial position')
 
-            # Store initial point
-            initial_point = msg.pose
-            self.initial_point = np.array([initial_point.position.x, initial_point.position.y, initial_point.position.z])
+    # Abort any ongoing motion (stop where it is)
+    # TODO: Check best implementation for this using Galil
+    def abort_motion(self):
+        self.get_logger().info('ABORT = To be implemented')
+
+    # Send desired movement to each channel
+    # WARNING: Galil channel B inverted, that is why the my_goal is negative
+    # TODO: Check if Channel B is still inverted
+    def send_movement(self, goal):
+        self.send_movement_in_counts(goal[0]*MM_2_COUNT_X,"A")   #X = CH_A
+        self.send_movement_in_counts(goal[2]*MM_2_COUNT_Z,"B")   #Z = CH_B
+        self.send_movement_in_counts(goal[1]*MM_2_COUNT_Y,"C")   #Y = CH_C
+
+    # Check if X counts exceeds channel limit
+    def check_limits(self, X, Channel):
+        if Channel == "C":
+            return X
+        if X > SAFE_LIMIT*MM_2_COUNT_X:
+            self.get_logger().info("Limit reach at axis %s" % (Channel))
+            X = SAFE_LIMIT*MM_2_COUNT_X
+        elif X < -SAFE_LIMIT*MM_2_COUNT_X:
+            self.get_logger().info("Limit reach at axis %s" % (Channel))
+            X = -SAFE_LIMIT*MM_2_COUNT_X
+        return X
+
+    # Send X movement counts to channel
+    def send_movement_in_counts(self, X, Channel):
+        try:
+            X = self.check_limits(X, Channel)
+            send = "PA%s=%d" % (Channel, int(X))
+            self.galil.GCommand(send)
+            send = "PA%s=%d" % (Channel, int(X))
+            self.get_logger().info("Sent to Galil PA%s=%d" % (Channel,X))
+            return True
+        except:
+            return False
+    
+    # Return 3D euclidean distance between two positions
+    def distance_positions(self, goal, position):        
+        return math.sqrt((goal[0]-position[0])**2+(goal[1]-position[1])**2+(goal[2]-position[2])**2)
+
+#### Service functions ###################################################
+
+    # Send command request
+    # TODO: Check differente between self.homing and self.send_command([0.0,0.0,0.0])
+    # TODO: Implement ABORT
+    def command_callback(self, request, response):
+        command = request.command
+        self.get_logger().debug('Received command request')
+        self.get_logger().info('Command %s' %(command))
+        if command == 'HOME':
+            # goal = np.array([0.0, 0.0, 0.0])
+            # self.send_movement(goal)
+            self.homing()
+            response.response = 'Command HOME sent'
+        elif command == 'RETRACT':
+            position = self.get_position()
+            goal = np.array([position[0], 0.0, position[2]])
+            self.send_movement(goal)
+            response.response = 'Command RETRACT sent'
+        elif command == 'ABORT':
+            self.abort_motion()
+        return response
+    
+#### Publishing callbacks ###################################################
+
+    # Publishes current robot pose
+    def timer_stage_pose_callback(self):
+        # Read guide position from robot motors
+        position = self.get_position()
+        # Construct robot message to publish             
+        msg = PointStamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = "stage"
+        msg.point.x = position[0]
+        msg.point.y = position[1]
+        msg.point.z = position[2]
+        self.publisher_stage_pose.publish(msg)
+        self.get_logger().debug('stage_pose: x=%f, y=%f, z=%f in %s frame'  % (msg.point.x, msg.point.y, msg.point.z, msg.header.frame_id))
+
+#### Action functions ###################################################
 
     # Destroy de action server
     def destroy(self):
@@ -140,65 +227,27 @@ class SmartTemplate(Node):
     def cancel_callback(self, goal_handle):
         self.get_logger().info('Received cancel request')
         return CancelResponse.ACCEPT
-
-    def check_limits(self,X,Channel):
-        if Channel == "C":
-            return X
-        if X > SAFE_LIMIT*MM_2_COUNT_X:
-            self.get_logger().info("Limit reach at axis %s" % (Channel))
-            X = SAFE_LIMIT*MM_2_COUNT_X
-        elif X < -SAFE_LIMIT*MM_2_COUNT_X:
-            self.get_logger().info("Limit reach at axis %s" % (Channel))
-            X = -SAFE_LIMIT*MM_2_COUNT_X
-        return X
-
-    def send_movement_in_counts(self,X,Channel):
-        try:
-            X = self.check_limits(X,Channel)
-            send = "PA%s=%d" % (Channel,int(X))
-            self.galil.GCommand(send)
-            send = "PA%s=%d" % (Channel,int(X))
-            self.get_logger().info("Sent to Galil PA%s=%d" % (Channel,X))
-            return True
-        except:
-            return False
-    
-    def distance_positions(self, goal, position):        
-        return math.sqrt((goal[0]-position[0])**2+(goal[1]-position[1])**2+(goal[2]-position[2])**2)
     
     # Execute a goal
     async def execute_callback(self, goal_handle):
-        self.get_logger().debug('Executing goal...')
+        self.get_logger().debug('Executing move_stage...')
         feedback = MoveStage.Feedback()
         result = MoveStage.Result()
-
         # Start executing the action
         if goal_handle.is_cancel_requested:
             goal_handle.canceled()
             self.get_logger().info('Goal canceled')
             return result
-
         # Get goal
         my_goal = goal_handle.request
-        #########################################################
-        # Subtract initial point from goal because robot considers initial position to be (0,0)
-        # change self.initial_point if initial position is not (0,0)
         goal = [my_goal.x, my_goal.y, my_goal.z]
-        # goal = [my_goal.x+initial_position[0], my_goal.y+initial_position[1], my_goal.z+initial_position[2]]
         self.get_logger().info("Command %s" % (goal))
-        #########################################################
-
         # Send control inputs
-        # WARNING: Galil channel B inverted, that is why the my_goal is negative
-        # TODO: Check if Channel B is still inverted
-        self.send_movement_in_counts(goal[0]*MM_2_COUNT_X,"A")    #X = CH_A
-        self.send_movement_in_counts(goal[2]*MM_2_COUNT_Z,"B")   #Z = CH_B
-        self.send_movement_in_counts(goal[1]*MM_2_COUNT_Y,"C")    #Y = CH_C
-        
+        self.send_movement(goal)
         # # Feedback loop (while goal is not reached or not timeout)
         # timer_on = False
         start_time = time.time()
-        # TODO: Do we need this? Will it be useful?
+        # TODO: Is there some feedback function from Galil that would be more efficient?
         # timeout_time = start_time
         # position = self.get_position()
         # while True:
@@ -233,18 +282,17 @@ class SmartTemplate(Node):
         #         goal_handle.abort()
         #         result.error_code = 1   # timeout
         #         break
-
         # Make always success (Temporary solution for now)
         goal_handle.succeed()
         position = self.get_position()
         result.error_code = 0
-
         # Set result message
         result.x = position[0]
         result.y = position[1]
         result.z = position[2]
         result.error = self.distance_positions(goal, position)
         result.time = time.time()-start_time
+        self.get_logger().info('Finished move_stage')
         return result
 
 ########################################################################
@@ -252,6 +300,7 @@ class SmartTemplate(Node):
 def main():
     rclpy.init()
     smart_template = SmartTemplate()
+    smart_template.get_logger().info('SmartTemplate ready')
     # Use a MultiThreadedExecutor to enable processing goals concurrently
     executor = MultiThreadedExecutor()
 
