@@ -189,7 +189,7 @@ class VirtualSmartTemplate(Node):
             # Check if reached target
             if err <= eps:
                 goal_handle.succeed()
-                result.error_code = 0
+                result.error_code = 0   # no error
                 break
             # Check if moving
             else:
@@ -211,7 +211,7 @@ class VirtualSmartTemplate(Node):
         result.z = position[2]
         result.error = self.distance_positions(goal, position)
         result.time = time.time()-start_time
-        self.get_logger().info('Finished move_stage')
+        self.get_logger().info('Finished move_stage. Result error code: %s' %result.error_code)
         return result
 
 #### Internal functions ###################################################
