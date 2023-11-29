@@ -4,7 +4,8 @@
 This repository contains:
 
 - ROS2 package for communicating with the 3 DoF Smart Template
-- The 3DoF Smart Template uses Galil Controller to control the position of the 3 motors 
+- The 3DoF Smart Template uses Galil Controller to control the position of the 3 motors
+- ROS 2 Galatic, Ubuntu 20.04
 
 ## Description
 ### Subscribers
