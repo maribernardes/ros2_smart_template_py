@@ -122,7 +122,7 @@ class VirtualSmartTemplate(Node):
             self.emulate_motion(goal, eps)
         elif command == 'ABORT':
             self.abort = True
-        self.get_logger().info(response)
+        self.get_logger().info(response.response)
         return response
     
 #### Action functions ###################################################
