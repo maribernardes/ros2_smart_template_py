@@ -38,6 +38,8 @@ COUNT_2_MM_Z = 0.0007
 
 SAFE_LIMIT = 60.0
 
+ERROR_GAIN = 500 #change the error from mm to counts
+
 TIMEOUT = 2             # timeout (sec) for move_stage action server 
 
 
@@ -88,12 +90,25 @@ class SmartTemplate(Node):
         self.galil.GCommand('PTA=1')
         self.galil.GCommand('PTB=1')
         self.galil.GCommand('PTC=1')
-        # # TODO: Do we need to this part that is in the code for homing?
-        # self.ser.write(str.encode("SH;")) #Check this code
-        # self.AbsoluteMode = True
+        self.AbsoluteMode = True
+        self.abort = False
 
 
 #### Internal functions ###################################################
+
+    # Get current robot position error
+    def tell_error(self):
+        try:
+            data_temp = self.galil.GCommand('TE')
+            data = data_temp.split(',')
+            x = int(data[0])
+            y = int(data[2])
+            z = int(data[1])
+            self.get_logger().info('errX=%f, errY=%f, errZ=%f' %(x, y, z))
+            return [x, y, z]
+        except:
+            return "error TE"
+
 
     # Get current robot position
     def get_position(self):
@@ -106,34 +121,17 @@ class SmartTemplate(Node):
             x = float(data[0])*COUNT_2_MM_X# + self.initial_point[0,0] # CHANNEL A
             y = float(data[2])*COUNT_2_MM_Y# + self.initial_point[1,0] # CHANNEL C
             z = float(data[1])*COUNT_2_MM_Z# + self.initial_point[2,0] # CHANNEL B
-            # self.get_logger().info('x=%f, y=%f, z=%f' %(x, y, z))
+            #self.get_logger().info('x=%f, y=%f, z=%f' %(x, y, z))
             return [x, y, z]
         except:
             return "error TP"
 
-    # Sends robot to home (initial) position
-    # TODO: Confirm with Pedro what is the difference between this and send_movement([0,0,0])
-    def homing(self):
-        if (self.initial_point.size == 0):  # Do only once
-            self.ser.write(str.encode("DPA=0;"))
-            time.sleep(0.02)
-            self.ser.write(str.encode("PTA=1;"))
-            time.sleep(0.02)
-            self.ser.write(str.encode("DPB=0;"))
-            time.sleep(0.02)
-            self.ser.write(str.encode("PTB=1;"))
-            time.sleep(0.02)
-            self.ser.write(str.encode("DPC=0;"))
-            time.sleep(0.02)
-            self.ser.write(str.encode("PTC=1;"))
-            time.sleep(0.02)
-            self.ser.write(str.encode("SH;")) #Check this code
-            self.AbsoluteMode = True
-
     # Abort any ongoing motion (stop where it is)
     # TODO: Check best implementation for this using Galil
     def abort_motion(self):
-        self.get_logger().info('ABORT = To be implemented')
+        # self.abort = True
+        self.galil.GCommand('SH')
+        self.get_logger().info('ABORT')
 
     # Send desired movement to each channel
     # WARNING: Galil channel B inverted, that is why the my_goal is negative
@@ -181,9 +179,8 @@ class SmartTemplate(Node):
         self.get_logger().debug('Received command request')
         self.get_logger().info('Command %s' %(command))
         if command == 'HOME':
-            # goal = np.array([0.0, 0.0, 0.0])
-            # self.send_movement(goal)
-            self.homing()
+            goal = np.array([0.0, 0.0, 0.0])
+            self.send_movement(goal)
             response.response = 'Command HOME sent'
         elif command == 'RETRACT':
             position = self.get_position()
@@ -247,45 +244,36 @@ class SmartTemplate(Node):
         # # Feedback loop (while goal is not reached or not timeout)
         # timer_on = False
         start_time = time.time()
-        # TODO: Is there some feedback function from Galil that would be more efficient?
-        # timeout_time = start_time
-        # position = self.get_position()
-        # while True:
-        #     time.sleep(0.2)
-        #     # Check current position
-        #     prev_position = position
-        #     position = self.get_position()
-        #     err = self.distance_positions(goal, position)
-        #     # Update feedback message
-        #     feedback.x = position[0]
-        #     feedback.y = position[1]
-        #     feedback.z = position[2]
-        #     feedback.error = err
-        #     feedback.time = time.time()-start_time
-        #     goal_handle.publish_feedback(feedback)
-        #     # Check if reached target
-        #     if err <= my_goal.eps:
-        #         goal_handle.succeed()
-        #         result.error_code = 0
-        #         break
-        #     # Check if moving
-        #     else:
-        #         motion = self.distance_positions(position, prev_position)
-        #         if (timer_on is False) and (motion < my_goal.eps):
-        #             timer_on = True         # Set timer
-        #             timeout_time = time.time() 
-        #         elif (timer_on is True) and (motion >= my_goal.eps):
-        #             timer_on = False        # Reset timer
-        #             timeout_time = time.time()
-        #     # Check if timeout:
-        #     if (timer_on is True) and ((time.time()-timeout_time) >= TIMEOUT):
-        #         goal_handle.abort()
-        #         result.error_code = 1   # timeout
-        #         break
-        # Make always success (Temporary solution for now)
-        goal_handle.succeed()
-        position = self.get_position()
         result.error_code = 0
+
+        while True:
+            time.sleep(0.1)
+            # Check current position error
+            err = self.tell_error()
+
+        #    TODO or not TODO # Update feedback message
+
+            if self.abort == True:
+                # self.galil.GCommand('SH')
+                goal_handle.abort()
+                result.error_code = 2   # abort
+                # self.abort = False
+                self.get_logger().info('Chegou no abort')
+                break
+
+           # Check if reached target
+            if (abs(err[0]) <= my_goal.eps*ERROR_GAIN) and (abs(err[1]) <= my_goal.eps*ERROR_GAIN) and (abs(err[2]) <= my_goal.eps*ERROR_GAIN):
+                goal_handle.succeed()
+                result.error_code = 0
+                break
+
+            if (time.time()-start_time) >= TIMEOUT:
+                goal_handle.abort()
+                result.error_code = 1   # timeout
+                break
+
+
+        position = self.get_position()
         # Set result message
         result.x = position[0]
         result.y = position[1]
