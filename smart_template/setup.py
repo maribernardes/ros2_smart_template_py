@@ -17,8 +17,8 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='Pedro Moreira (BWH)',
-    maintainer_email='plopesdafrotamoreira@bwh.harvard.edu',
+    maintainer='Pedro Moreira (BWH), Mariana Bernardes (BWH)',
+    maintainer_email='plopesdafrotamoreira@bwh.harvard.edu, mcostabernardesmatias@bwh.harvard.edu',
     description='TODO: Package description',
     license='TODO: License declaration',
     tests_require=['pytest'],
@@ -27,9 +27,6 @@ setup(
             'template = smart_template.template:main',
             'virtual_template = smart_template.virtual_template:main',
             'keypress = smart_template.keypress:main',
-            'initialization = smart_template.initialization:main',
-            'smart_needle_interface = smart_template.smart_needle_interface:main',
-            'mri_tracking_interface = smart_template.mri_tracking_interface:main'
         ],
     },
 )
