@@ -13,7 +13,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from smart_control_interfaces.action import MoveStage
-from smart_control_interfaces.srv import ControllerCommand
+from smart_control_interfaces.srv import ControllerCommand, GetPoint
 from ros2_igtl_bridge.msg import Transform
 from numpy import asarray, savetxt, loadtxt
 from scipy.ndimage import median_filter
@@ -40,7 +40,7 @@ SAFE_LIMIT = 60.0
 
 ERROR_GAIN = 500 #change the error from mm to counts
 
-TIMEOUT = 2             # timeout (sec) for move_stage action server 
+TIMEOUT = 30.0             # timeout (sec) for move_stage action server 
 
 
 #########################################################################
@@ -55,8 +55,9 @@ TIMEOUT = 2             # timeout (sec) for move_stage action server
 # '/stage/state/guide_pose'     (geometry_msgs.msg.PointStamped)  - robot frame
 #
 # Action/service clients:
-# '/move_stage' (smart_control_interfaces.action.MoveStage) - robot frame
-# '/command'    (smart_control_interfaces.srv.ControllerCommand) - robot frame
+# '/stage/move'         (smart_control_interfaces.action.MoveStage) - robot frame
+# '/stage/command'      (smart_control_interfaces.srv.ControllerCommand) - robot frame
+# '/stage/get_position' (smart_control_interfaces.srv.GetPoint) - robot frame
 # 
 #########################################################################
 
@@ -66,19 +67,20 @@ class SmartTemplate(Node):
     def __init__(self):
         super().__init__('smart_template')      
 
-#### Published topics ###################################################
+    #### Published topics ###################################################
 
         timer_period = 0.2  # seconds
         self.timer = self.create_timer(timer_period, self.timer_stage_pose_callback)
         self.publisher_stage_pose = self.create_publisher(PointStamped, '/stage/state/guide_pose', 10)
 
-#### Action/Service server ##############################################
+    #### Action/Service server ##############################################
        
-        self._action_server = ActionServer(self, MoveStage, '/move_stage', execute_callback=self.execute_callback,\
-            callback_group=ReentrantCallbackGroup(), goal_callback=self.goal_callback, cancel_callback=self.cancel_callback)
-        self.srv = self.create_service(ControllerCommand, '/command', self.command_callback)
+        self._action_server = ActionServer(self, MoveStage, '/stage/move', execute_callback=self.execute_move_callback,\
+            callback_group=ReentrantCallbackGroup(), goal_callback=self.move_callback, cancel_callback=self.cancel_move_callback)
+        self.command_server = self.create_service(ControllerCommand, '/stage/command', self.command_callback, callback_group=ReentrantCallbackGroup())
+        self.current_position_server = self.create_service(GetPoint, '/stage/get_position', self.current_position_callback, callback_group=ReentrantCallbackGroup())
 
-#### Node initialization ###################################################
+    #### Connection initialization ###################################################
 
         # Start serial communication
         self.galil = gclib.py()
@@ -92,7 +94,6 @@ class SmartTemplate(Node):
         self.galil.GCommand('PTC=1')
         self.AbsoluteMode = True
         self.abort = False
-
 
 #### Internal functions ###################################################
 
@@ -108,7 +109,6 @@ class SmartTemplate(Node):
             return [x, y, z]
         except:
             return "error TE"
-
 
     # Get current robot position
     def get_position(self):
@@ -171,9 +171,20 @@ class SmartTemplate(Node):
 
 #### Service functions ###################################################
 
-    # Send command request
-    # TODO: Check differente between self.homing and self.send_command([0.0,0.0,0.0])
-    # TODO: Implement ABORT
+    # Current position service request
+    def current_position_callback(self, request, response):
+        self.get_logger().debug('Received current position request')
+        try:
+            position = self.get_position()
+            response.valid = True
+            response.x = position[0]
+            response.y = position[1]
+            response.z = position[2]
+        except:
+            response.valid = False
+        return response
+    
+    # Command service request
     def command_callback(self, request, response):
         command = request.command
         self.get_logger().debug('Received command request')
@@ -216,17 +227,17 @@ class SmartTemplate(Node):
 
     # Accept or reject a client request to begin an action
     # This server allows multiple goals in parallel
-    def goal_callback(self, goal_request):
+    def move_callback(self, goal_request):
         self.get_logger().debug('Received goal request')
         return GoalResponse.ACCEPT
 
     # Accept or reject a client request to cancel an action
-    def cancel_callback(self, goal_handle):
+    def cancel_move_callback(self, goal_handle):
         self.get_logger().info('Received cancel request')
         return CancelResponse.ACCEPT
     
     # Execute a goal
-    async def execute_callback(self, goal_handle):
+    async def execute_move_callback(self, goal_handle):
         self.get_logger().debug('Executing move_stage...')
         feedback = MoveStage.Feedback()
         result = MoveStage.Result()

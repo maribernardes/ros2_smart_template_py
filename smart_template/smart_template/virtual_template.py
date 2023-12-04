@@ -8,7 +8,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from smart_control_interfaces.action import MoveStage
-from smart_control_interfaces.srv import ControllerCommand
+from smart_control_interfaces.srv import ControllerCommand, GetPoint
 
 from ros2_igtl_bridge.msg import Transform
 from numpy import asarray, savetxt, loadtxt
@@ -65,9 +65,10 @@ class VirtualSmartTemplate(Node):
 
 #### Action/Service server ##############################################
 
-        self._action_server = ActionServer(self, MoveStage, '/move_stage', execute_callback=self.execute_callback,\
-            callback_group=ReentrantCallbackGroup(), goal_callback=self.goal_callback, cancel_callback=self.cancel_callback)
-        self.srv = self.create_service(ControllerCommand, '/command', self.command_callback)
+        self._action_server = ActionServer(self, MoveStage, '/stage/move', execute_callback=self.execute_move_callback,\
+            callback_group=ReentrantCallbackGroup(), goal_callback=self.move_callback, cancel_callback=self.cancel_move_callback)
+        self.command_server = self.create_service(ControllerCommand, '/stage/command', self.command_callback, callback_group=ReentrantCallbackGroup())
+        self.current_position_server = self.create_service(GetPoint, '/stage/get_position', self.current_position_callback, callback_group=ReentrantCallbackGroup())
 
 #### Stored variables ###################################################
 
@@ -101,6 +102,20 @@ class VirtualSmartTemplate(Node):
 
 #### Service functions ###################################################
 
+    # Return current robot position
+    def current_position_callback(self, request, response):
+        self.get_logger().debug('Received current position request')
+        try:
+            position = self.get_position()
+            response.valid = True
+            response.x = position[0]
+            response.y = position[1]
+            response.z = position[2]
+        except:
+            response.valid = False
+        return response
+
+    # Command robot
     def command_callback(self, request, response):
         command = request.command
         self.get_logger().debug('Received command request')
@@ -129,17 +144,17 @@ class VirtualSmartTemplate(Node):
 
     # Accept or reject a client request to begin an action
     # This action server allows multiple goals in parallel
-    def goal_callback(self, goal_request):
+    def move_callback(self, goal_request):
         self.get_logger().debug('Received goal request')
         return GoalResponse.ACCEPT
 
     # Accept or reject a client request to cancel an action
-    def cancel_callback(self, goal_handle):
+    def cancel_move_callback(self, goal_handle):
         self.get_logger().info('Received cancel request')
         return CancelResponse.ACCEPT
 
     # Execute a goal
-    async def execute_callback(self, goal_handle):
+    async def execute_move_callback(self, goal_handle):
         self.get_logger().info('Executing move_stage...')
         feedback = MoveStage.Feedback()
         result = MoveStage.Result()

@@ -22,6 +22,8 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/MoveStage.action"
   "srv/ControllerCommand.srv"
+  "srv/GetPoint.srv"
+  "srv/GetPose.srv"
 )
 
 if(BUILD_TESTING)
