@@ -31,9 +31,9 @@ class Keypress(Node):
 
     def timer_keyboard_callback(self):
         k = ord(getch.getch())  # this is used to convert the keypress event in the keyboard or joypad , joystick to a ord value
-        # to filter only desired keys: 10=ENTER, 32=SPACE, 50=down_numkey, 52=left_numkey, 54=right_numkey, 56=up_numkey
+        # to filter only desired keys: 10=ENTER, 32=SPACE, 50=down_numkey, 52=left_numkey, 54=right_numkey, 56=up_numkey, 43=PlusSign, 45=MinusSign
         # 65=A, 72=H, 82=R
-        if (k==10) or (k==32) or (k==50) or (k==52) or (k==54) or (k==56) or (k==65) or (k==72) or (k==82):
+        if (k==10) or (k==32) or (k==50) or (k==52) or (k==54) or (k==56) or (k==43) or (k==45) or (k==65) or (k==72) or (k==82):
             msg = Int8()
             msg.data = k
             key=''
@@ -49,6 +49,10 @@ class Keypress(Node):
                 key='RIGHT'
             elif (k==56):
                 key='UP'
+            elif (k==43):
+                key='+'    
+            elif (k==45):
+                key='-'                            
             elif (k==65):
                 key='ABORT'
             elif (k==72):
@@ -56,7 +60,7 @@ class Keypress(Node):
             elif (k==82):
                 key='RETRACT'
             self.publisher.publish(msg)
-            self.get_logger().info('Pressed %s' %(key))
+            self.get_logger().info('Pressed %s (%i)' %(key, k))
 
 ########################################################################
 

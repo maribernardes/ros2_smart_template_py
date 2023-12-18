@@ -120,7 +120,7 @@ class VirtualSmartTemplate(Node):
         command = request.command
         self.get_logger().debug('Received command request')
         self.get_logger().info('Command %s' %(command))
-        eps = 0.001
+        eps = 0.5
         if command == 'HOME':
             goal = np.array([0.0, 0.0, 0.0])
             response.response = 'Command HOME sent'
