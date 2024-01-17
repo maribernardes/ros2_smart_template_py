@@ -30,8 +30,11 @@ from datetime import datetime
 MM_2_COUNT_X = 715.0  
 COUNT_2_MM_X = 0.0014
 # Depth
-MM_2_COUNT_Y = -2000.0 
-COUNT_2_MM_Y = -0.0005
+MM_2_COUNT_Y = -2000.0/1.27
+COUNT_2_MM_Y = -0.0005*1.27
+# MM_2_COUNT_Y = -2000.0 
+# COUNT_2_MM_Y = -0.0005
+
 # Vertical
 MM_2_COUNT_Z = 1430.0 
 COUNT_2_MM_Z = 0.0007
