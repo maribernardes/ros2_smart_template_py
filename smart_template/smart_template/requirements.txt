@@ -1,0 +1,5 @@
+numpy
+scipy
+transforms3d
+numpy-quaternion
+getch

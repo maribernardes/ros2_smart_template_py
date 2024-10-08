@@ -23,6 +23,7 @@ from geometry_msgs.msg import Quaternion
 from transforms3d.euler import euler2quat
 from scipy.io import loadmat
 from std_msgs.msg import Int8
+from sensor_msgs.msg import JointState
 
 from datetime import datetime
 
@@ -32,9 +33,6 @@ COUNT_2_MM_X = 0.0014
 # Depth
 MM_2_COUNT_Y = -2000.0/1.27
 COUNT_2_MM_Y = -0.0005*1.27
-# MM_2_COUNT_Y = -2000.0 
-# COUNT_2_MM_Y = -0.0005
-
 # Vertical
 MM_2_COUNT_Z = 1430.0 
 COUNT_2_MM_Z = 0.0007
@@ -75,6 +73,7 @@ class SmartTemplate(Node):
         timer_period = 0.2  # seconds
         self.timer = self.create_timer(timer_period, self.timer_stage_pose_callback)
         self.publisher_stage_pose = self.create_publisher(PointStamped, '/stage/state/guide_pose', 10)
+        self.publisher_joint_states = self.create_publisher(JointState, 'joint_states', 10)
 
     #### Action/Service server ##############################################
        
@@ -97,6 +96,8 @@ class SmartTemplate(Node):
         self.galil.GCommand('PTC=1')
         self.AbsoluteMode = True
         self.abort = False
+        # Set joint names
+        self.joint_names = ['horizontal_joint', 'insertion_joint', 'vertical_joint']
 
 #### Internal functions ###################################################
 
@@ -214,12 +215,18 @@ class SmartTemplate(Node):
         # Construct robot message to publish             
         msg = PointStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = "stage"
+        msg.header.frame_id = 'stage'
         msg.point.x = position[0]
         msg.point.y = position[1]
         msg.point.z = position[2]
         self.publisher_stage_pose.publish(msg)
         self.get_logger().debug('stage_pose: x=%f, y=%f, z=%f in %s frame'  % (msg.point.x, msg.point.y, msg.point.z, msg.header.frame_id))
+        # Update joint_state message to publish
+        joint_state_msg = JointState()                
+        joint_state_msg.header.stamp = self.get_clock().now().to_msg()
+        joint_state_msg.name = self.joint_names
+        joint_state_msg.position = [0.001*position[0], 0.001*position[1], 0.001*position[2]] # Convert from mm to m
+        self.publisher_joint_states.publish(joint_state_msg)
 
 #### Action functions ###################################################
 
