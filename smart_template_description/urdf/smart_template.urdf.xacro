@@ -10,6 +10,7 @@
    </xacro:smart_template>
 
    <joint name="base_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
     <parent link="world"/>
     <child link="base_link" />
   </joint>

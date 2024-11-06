@@ -1,12 +1,15 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://wiki.ros.org/xacro">
+
   <xacro:macro name="smart_template">
     
+    <!-- Include materials -->
     <xacro:include filename="$(find smart_template_description)/urdf/materials.xacro" />
 
+    <!-- Define Links -->
     <link name="base_link">
-      <visual>
-        <origin xyz="0 0 -0.025" rpy="0 0 ${-pi/2}"/>
+      <visual>        
+        <origin xyz="0 0 0" rpy="0 0 ${-pi/2}"/>
         <geometry>
           <mesh filename="package://smart_template_description/meshes/base_link.stl"/>
         </geometry>
@@ -44,6 +47,7 @@
       </visual>
     </link>
 
+    <!-- Define joints -->
     <joint name="vertical_joint" type="prismatic">
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <parent link="base_link"/>
