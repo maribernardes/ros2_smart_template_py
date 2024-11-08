@@ -1,11 +1,11 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>smart_control_interfaces</name>
-  <version>0.0.0</version>
+  <name>smart_template_interfaces</name>
+  <version>1.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="plopesdafrotamoreira@bwh.harvard.edu">Pedro Moreira (BWH)</maintainer>
   <maintainer email="mcostabernardesmatias@bwh.harvard.edu">Mariana Bernardes (BWH)</maintainer>
+  <maintainer email="plopesdafrotamoreira@bwh.harvard.edu">Pedro Moreira (BWH)</maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

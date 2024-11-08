@@ -7,8 +7,8 @@ from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from smart_control_interfaces.action import MoveStage
-from smart_control_interfaces.srv import ControllerCommand, GetPoint
+from smart_template_interfaces.action import MoveStage
+from smart_template_interfaces.srv import ControllerCommand, GetPoint
 
 from ros2_igtl_bridge.msg import Transform
 from numpy import asarray, savetxt, loadtxt
@@ -47,8 +47,8 @@ TIMEOUT = 5             # timeout (sec) for move_stage action server
 # '/stage/state/guide_pose'     (geometry_msgs.msg.PointStamped)  - robot frame
 #
 # Action/service clients:
-# '/move_stage' (smart_control_interfaces.action.MoveStage) - robot frame
-# '/command'    (smart_control_interfaces.srv.ControllerCommand) - robot frame
+# '/move_stage' (smart_template_interfaces.action.MoveStage) - robot frame
+# '/command'    (smart_template_interfaces.srv.ControllerCommand) - robot frame
 # 
 #########################################################################
 
@@ -232,6 +232,7 @@ class VirtualSmartTemplate(Node):
         result.error = self.distance_positions(goal, position)
         result.time = time.time()-start_time
         self.get_logger().info('Finished move_stage. Result error code: %s' %result.error_code)
+        self.get_logger().info('Final position: x=%.4f, y=%.4f, z=%.4f' %(result.z, result.y, result.z))
         return result
 
 #### Internal functions ###################################################

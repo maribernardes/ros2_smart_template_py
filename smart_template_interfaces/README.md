@@ -1,2 +1,2 @@
-# Smart Control Interfaces
+# Smart Template Interfaces
 Package containing service and action definitions for the smart_template package.

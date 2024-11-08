@@ -12,8 +12,8 @@ from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from smart_control_interfaces.action import MoveStage
-from smart_control_interfaces.srv import ControllerCommand, GetPoint
+from smart_template_interfaces.action import MoveStage
+from smart_template_interfaces.srv import ControllerCommand, GetPoint
 from ros2_igtl_bridge.msg import Transform
 from numpy import asarray, savetxt, loadtxt
 from scipy.ndimage import median_filter
@@ -56,9 +56,9 @@ TIMEOUT = 30.0             # timeout (sec) for move_stage action server
 # '/stage/state/guide_pose'     (geometry_msgs.msg.PointStamped)  - robot frame
 #
 # Action/service clients:
-# '/stage/move'         (smart_control_interfaces.action.MoveStage) - robot frame
-# '/stage/command'      (smart_control_interfaces.srv.ControllerCommand) - robot frame
-# '/stage/get_position' (smart_control_interfaces.srv.GetPoint) - robot frame
+# '/stage/move'         (smart_template_interfaces.action.MoveStage) - robot frame
+# '/stage/command'      (smart_template_interfaces.srv.ControllerCommand) - robot frame
+# '/stage/get_position' (smart_template_interfaces.srv.GetPoint) - robot frame
 # 
 #########################################################################
 
