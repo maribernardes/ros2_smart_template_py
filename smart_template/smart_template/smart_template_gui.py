@@ -20,6 +20,8 @@ from sensor_msgs.msg import JointState
 from smart_template_interfaces.action import MoveStage
 from smart_template_interfaces.srv import ControllerCommand
 
+from functools import partial
+
 class SmartTemplateGUIPlugin(Plugin):
     # Define a signal that carries joint names and positions
     update_joint_state_signal = Signal(dict)
@@ -164,13 +166,14 @@ class SmartTemplateGUIPlugin(Plugin):
         main_layout.addLayout(joint_controls_layout)
 
         # Add spacer between left and right panels
-        main_layout.addSpacerItem(QSpacerItem(40, 0))  # Horizontal spacer to increase space
+        main_layout.addSpacerItem(QSpacerItem(15, 0))  # Horizontal spacer to increase space
 
         # Vertical line separator
         line = QFrame()
         line.setFrameShape(QFrame.VLine)
         line.setFrameShadow(QFrame.Sunken)
         main_layout.addWidget(line)
+        main_layout.addSpacerItem(QSpacerItem(15, 0))  # Horizontal spacer to increase space
 
         # Right panel: Button controls
         button_controls_layout = QVBoxLayout()
@@ -179,6 +182,11 @@ class SmartTemplateGUIPlugin(Plugin):
         retract_home_layout = QHBoxLayout()
         retract_button = QPushButton('RETRACT')
         home_button = QPushButton('HOME')
+
+        # Connect buttons to the service request function
+        retract_button.clicked.connect(lambda: self.send_service_request('RETRACT'))
+        home_button.clicked.connect(lambda: self.send_service_request('HOME'))
+
         retract_home_layout.addWidget(retract_button)
         retract_home_layout.addWidget(home_button)
         button_controls_layout.addLayout(retract_home_layout)
@@ -193,10 +201,10 @@ class SmartTemplateGUIPlugin(Plugin):
         down_button = QPushButton('↓')
 
         # Create step size text boxes
-        up_down_step_size = QLineEdit('1.0')  # Text box for up/down step size
-        left_right_step_size = QLineEdit('1.0')  # Text box for left/right step size
-        up_down_step_size.setFixedWidth(50)
-        left_right_step_size.setFixedWidth(50)
+        self.up_down_step_size = QLineEdit('1.0')  # Text box for up/down step size
+        self.left_right_step_size = QLineEdit('1.0')  # Text box for left/right step size
+        self.up_down_step_size.setFixedWidth(50)
+        self.left_right_step_size.setFixedWidth(50)
 
         # Set fixed size for buttons
         button_size = 40
@@ -204,6 +212,12 @@ class SmartTemplateGUIPlugin(Plugin):
         left_button.setFixedSize(button_size, button_size)
         right_button.setFixedSize(button_size, button_size)
         down_button.setFixedSize(button_size, button_size)
+
+        # Connect buttons to the unified motion handling function
+        up_button.clicked.connect(lambda: self.handle_step_motion_button('UP'))
+        left_button.clicked.connect(lambda: self.handle_step_motion_button('LEFT'))
+        right_button.clicked.connect(lambda: self.handle_step_motion_button('RIGHT'))
+        down_button.clicked.connect(lambda: self.handle_step_motion_button('DOWN'))
 
         # Layout for cross pattern with empty center
         cross_layout = QGridLayout()
@@ -216,8 +230,8 @@ class SmartTemplateGUIPlugin(Plugin):
         cross_layout.addWidget(down_button, 2, 1, alignment=Qt.AlignCenter)  # Down button
 
         # Add step size text boxes near corresponding buttons
-        cross_layout.addWidget(up_down_step_size, 0, 3, alignment=Qt.AlignLeft)  # Step size for up/down
-        cross_layout.addWidget(left_right_step_size, 1, 3, alignment=Qt.AlignLeft)  # Step size for left/right
+        cross_layout.addWidget(self.up_down_step_size, 0, 3, alignment=Qt.AlignLeft)  # Step size for up/down
+        cross_layout.addWidget(self.left_right_step_size, 1, 3, alignment=Qt.AlignLeft)  # Step size for left/right
 
         # Add cross layout to main button controls layout
         cross_pattern_layout.addLayout(cross_layout)
@@ -227,13 +241,17 @@ class SmartTemplateGUIPlugin(Plugin):
         plus_minus_layout = QHBoxLayout()
         plus_button = QPushButton('+')
         minus_button = QPushButton('-')
-        insertion_step_size = QLineEdit('1.0')  # Text box for insertion step size
-        insertion_step_size.setFixedWidth(50)
+        self.insertion_step_size = QLineEdit('5.0')  # Text box for insertion step size
+        self.insertion_step_size.setFixedWidth(50)
+
+        # Connect buttons to the unified motion handling function
+        plus_button.clicked.connect(lambda: self.handle_step_motion_button('+'))
+        minus_button.clicked.connect(lambda: self.handle_step_motion_button('-'))
 
         plus_minus_layout.addWidget(plus_button)
         plus_minus_layout.addWidget(minus_button)
         plus_minus_layout.addStretch()  # Spacer to push the text box to the right
-        plus_minus_layout.addWidget(insertion_step_size)
+        plus_minus_layout.addWidget(self.insertion_step_size)
 
         button_controls_layout.addLayout(plus_minus_layout)
 
@@ -242,6 +260,30 @@ class SmartTemplateGUIPlugin(Plugin):
 
         # Set layout to the widget
         self._widget.setLayout(main_layout)
+
+    def handle_step_motion_button(self, direction):
+        try:
+            step_size = 0
+            joint_key = ''
+
+            if direction in ['UP', 'DOWN']:
+                step_size = float(self.up_down_step_size.text())
+                joint_key = 'vertical_joint'
+                step_modifier = 1 if direction == 'UP' else -1
+            elif direction in ['LEFT', 'RIGHT']:
+                step_size = float(self.left_right_step_size.text())
+                joint_key = 'horizontal_joint'
+                step_modifier = 1 if direction == 'RIGHT' else -1
+            elif direction in ['+', '-']:
+                step_size = float(self.insertion_step_size.text())
+                joint_key = 'insertion_joint'
+                step_modifier = 1 if direction == '+' else -1
+
+            if joint_key:
+                self.desired_joint_values[joint_key] += step_modifier * step_size
+                self.send_action_request(self.desired_joint_values)
+        except ValueError:
+            self.node.get_logger().warn('Invalid step size value')
 
 
     def joint_state_callback(self, msg):
@@ -298,6 +340,24 @@ class SmartTemplateGUIPlugin(Plugin):
             # Send action request
             self.send_action_request(self.desired_joint_values)
 
+
+    # Send service request to smart_template robot 
+    def send_service_request(self, cmd_string):
+        self.robot_idle = False
+        request = ControllerCommand.Request()
+        request.command = cmd_string
+        future = self.service_client.call_async(request)
+        future.add_done_callback(partial(self.get_response_callback))
+
+    def get_response_callback(self, future):
+        try:
+            response = future.result()
+            self.node.get_logger().info('Service call sucessful: %s' %(response.response)) 
+        except Exception as e:
+            self.node.get_logger().error('Service call failed: %r' %(e,))
+        self.robot_idle = True
+
+    # Send action request to smart_template robot
     def send_action_request(self, desired_joint_values):
         self.robot_idle = False
         # Send command to stage
