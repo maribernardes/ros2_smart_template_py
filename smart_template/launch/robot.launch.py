@@ -3,7 +3,7 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription, conditions
 from launch.substitutions.launch_configuration import LaunchConfiguration
-from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument, ExecuteProcess
 from launch.substitutions import PythonExpression, Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.conditions import IfCondition
@@ -25,10 +25,17 @@ def generate_launch_description():
     )  
 
     arg_rviz = DeclareLaunchArgument(
+        'rviz', 
+        default_value = 'false', 
+        choices = ['true', 'false'],
+        description = 'Start RViz automatically'
+    )
+
+    arg_gui = DeclareLaunchArgument(
         'gui', 
         default_value = 'true', 
         choices = ['true', 'false'],
-        description = 'Start RViz automatically'
+        description = 'Start SmartTemplate GUI plugin automatically'
     )
 
     arg_description_package = DeclareLaunchArgument(
@@ -96,12 +103,20 @@ def generate_launch_description():
         executable='rviz2',
         output='screen',
         arguments = ['-d', rviz_file],
-        condition = IfCondition(LaunchConfiguration('gui'))
+        condition = IfCondition(LaunchConfiguration('rviz'))
+    )
+
+    # RQt GUI plugin conditionally
+    gui_plugin = ExecuteProcess(
+        condition=IfCondition(LaunchConfiguration('gui')),
+        cmd=['rqt', '--standalone', 'smart_template_gui'],
+        output='screen'
     )
 
     # Include launch arguments
     ld.add_action(arg_sim_level)
     ld.add_action(arg_rviz)
+    ld.add_action(arg_gui)
     ld.add_action(arg_description_package)
     ld.add_action(arg_description_file)
     ld.add_action(arg_name)
@@ -111,5 +126,6 @@ def generate_launch_description():
     ld.add_action(robot_real_hardware_launch)
     ld.add_action(robot_virtual_launch)
     ld.add_action(rviz_node)
+    ld.add_action(gui_plugin)
 
     return ld

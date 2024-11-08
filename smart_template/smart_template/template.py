@@ -52,8 +52,9 @@ TIMEOUT = 30.0             # timeout (sec) for move_stage action server
 # This node runs the SmartTemplate communication with Galil and implement
 # the robot service and action servers
 #
-# Subscribes:   
+# Publishes:   
 # '/stage/state/guide_pose'     (geometry_msgs.msg.PointStamped)  - robot frame
+# '/joint_states'     (geometry_msgs.msg.PointStamped)  - robot frame
 #
 # Action/service clients:
 # '/stage/move'         (smart_template_interfaces.action.MoveStage) - robot frame
@@ -73,7 +74,7 @@ class SmartTemplate(Node):
         timer_period = 0.2  # seconds
         self.timer = self.create_timer(timer_period, self.timer_stage_pose_callback)
         self.publisher_stage_pose = self.create_publisher(PointStamped, '/stage/state/guide_pose', 10)
-        self.publisher_joint_states = self.create_publisher(JointState, 'joint_states', 10)
+        self.publisher_joint_states = self.create_publisher(JointState, '/joint_states', 10)
 
     #### Action/Service server ##############################################
        
