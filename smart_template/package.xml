@@ -2,10 +2,10 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>smart_template</name>
-  <version>0.0.0</version>
+  <version>1.0.0</version>
   <description>3DOF Smart Template ROS2 package</description>
-  <maintainer email="pedrolfm@gmail.com">Pedro Moreira</maintainer>
   <maintainer email="maribernardes@gmail.com">Mariana Bernardes</maintainer>
+  <maintainer email="pedrolfm@gmail.com">Pedro Moreira</maintainer>
   <license>TODO: License declaration</license>
 
   <test_depend>ament_copyright</test_depend>
@@ -13,9 +13,16 @@
   <test_depend>ament_pep257</test_depend>
   <test_depend>python3_pytest</test_depend>
 
-  <depend>smart_control_interfaces</depend>
+  <depend>smart_template_interfaces</depend>
+  <depend>smart_template_description</depend>
+
+  <depend>rclpy</depend>
+  <depend>rqt_gui</depend>
+  <depend>rqt_gui_py</depend>
+  <depend>python3-pyqt5</depend>
 
   <export>
     <build_type>ament_python</build_type>
+    <rqt_gui plugin="${prefix}/plugin.xml"/>
   </export>
 </package>

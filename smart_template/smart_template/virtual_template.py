@@ -7,8 +7,8 @@ from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from smart_control_interfaces.action import MoveStage
-from smart_control_interfaces.srv import ControllerCommand, GetPoint
+from smart_template_interfaces.action import MoveStage
+from smart_template_interfaces.srv import ControllerCommand, GetPoint
 
 from ros2_igtl_bridge.msg import Transform
 from numpy import asarray, savetxt, loadtxt
@@ -19,12 +19,13 @@ from geometry_msgs.msg import Quaternion
 from transforms3d.euler import euler2quat
 from scipy.io import loadmat
 from std_msgs.msg import Int8
+from sensor_msgs.msg import JointState
 
 from datetime import datetime
 
-HOME_X = 0.0
-HOME_Y = 0.0
-HOME_Z = 0.0
+HOME_X = 0.0    #X = Horizontal
+HOME_Y = 0.0    #Y = Depth
+HOME_Z = 0.0    #Z = Vertical
 
 STEP_X = 0.05
 STEP_Y = 0.1
@@ -46,8 +47,8 @@ TIMEOUT = 5             # timeout (sec) for move_stage action server
 # '/stage/state/guide_pose'     (geometry_msgs.msg.PointStamped)  - robot frame
 #
 # Action/service clients:
-# '/move_stage' (smart_control_interfaces.action.MoveStage) - robot frame
-# '/command'    (smart_control_interfaces.srv.ControllerCommand) - robot frame
+# '/move_stage' (smart_template_interfaces.action.MoveStage) - robot frame
+# '/command'    (smart_template_interfaces.srv.ControllerCommand) - robot frame
 # 
 #########################################################################
 
@@ -62,6 +63,7 @@ class VirtualSmartTemplate(Node):
         timer_period_stage = 0.3  # seconds
         self.timer_stage = self.create_timer(timer_period_stage, self.timer_stage_pose_callback)
         self.publisher_stage_pose = self.create_publisher(PointStamped, '/stage/state/guide_pose', 10)
+        self.publisher_joint_states = self.create_publisher(JointState, 'joint_states', 10)
 
 #### Action/Service server ##############################################
 
@@ -73,6 +75,8 @@ class VirtualSmartTemplate(Node):
 #### Stored variables ###################################################
 
         self.position = np.empty(shape=[0,3])           # Current position
+        self.joint_names = ['horizontal_joint', 'insertion_joint', 'vertical_joint']
+
         self.abort = False                              # Flag to abort command
 
 #### Node initialization ###################################################
@@ -94,11 +98,17 @@ class VirtualSmartTemplate(Node):
         # Construct robot message to publish             
         msg = PointStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = "stage"
+        msg.header.frame_id = 'stage'
         msg.point.x = position[0]
         msg.point.y = position[1]
         msg.point.z = position[2]
         self.publisher_stage_pose.publish(msg)
+        # Update joint_state message to publish
+        joint_state_msg = JointState()                
+        joint_state_msg.header.stamp = self.get_clock().now().to_msg()
+        joint_state_msg.name = self.joint_names
+        joint_state_msg.position = [0.001*position[0], 0.001*position[1], 0.001*position[2]] # Convert from mm to m
+        self.publisher_joint_states.publish(joint_state_msg)
 
 #### Service functions ###################################################
 
@@ -222,6 +232,7 @@ class VirtualSmartTemplate(Node):
         result.error = self.distance_positions(goal, position)
         result.time = time.time()-start_time
         self.get_logger().info('Finished move_stage. Result error code: %s' %result.error_code)
+        self.get_logger().info('Final position: x=%.4f, y=%.4f, z=%.4f' %(result.z, result.y, result.z))
         return result
 
 #### Internal functions ###################################################

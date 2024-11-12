@@ -1,25 +1,26 @@
 import os
 from glob import glob
-from setuptools import setup
+from setuptools import setup, find_packages
 
 package_name = 'smart_template'
 
 setup(
     name=package_name,
     version='0.0.1',
-    packages=[package_name],
+    packages=find_packages(),
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
-        ('share/' + package_name, ['package.xml']),        
+        ('share/' + package_name, ['package.xml']),  
+        ('share/' + package_name, ['plugin.xml']),      
         ('share/' + package_name + '/files', glob('files/*')),
         ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='Pedro Moreira (BWH), Mariana Bernardes (BWH)',
-    maintainer_email='plopesdafrotamoreira@bwh.harvard.edu, mcostabernardesmatias@bwh.harvard.edu',
-    description='TODO: Package description',
+    maintainer='Mariana Bernardes (BWH), Pedro Moreira (BWH)',
+    maintainer_email='mcostabernardesmatias@bwh.harvard.edu, plopesdafrotamoreira@bwh.harvard.edu',
+    description='SmartTemplate python package with GUI plugin',
     license='TODO: License declaration',
     tests_require=['pytest'],
     entry_points={
@@ -27,6 +28,9 @@ setup(
             'template = smart_template.template:main',
             'virtual_template = smart_template.virtual_template:main',
             'keypress = smart_template.keypress:main',
+        ],
+        'rqt_gui_py.plugins': [
+            'smart_template_gui = smart_template.smart_template_gui:SmartTemplateGUIPlugin',
         ],
     },
 )

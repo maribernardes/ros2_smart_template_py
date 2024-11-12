@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="$(arg name)">
+
+   <xacro:include filename="$(find smart_template_description)/urdf/smart_template.xacro"/>
+
+   <!-- create link fixed to the "world" -->
+   <link name="world" />
+
+   <xacro:smart_template>
+   </xacro:smart_template>
+
+   <joint name="base_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="world"/>
+    <child link="base_link" />
+  </joint>
+  
+</robot>

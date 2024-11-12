@@ -13,6 +13,7 @@ This repository contains:
 
 ### Publishers
 - '/stage/state/guide_pose', a PoseStamped with the current position of the template. It's refresh rate is given by the "timer_period"
+- '/joint_states', a JointState with the current joint values of the template. It's refresh rate is given by the "timer_period"
 
 ### Action server
 
@@ -44,18 +45,25 @@ This repository contains:
 * ---
 * string response
 
-  * command can be: 'HOME', 'ABORT' or 'RETRACT' 
+  * command can be: 'HOME', or 'RETRACT' ('ABORT' still to be implemented)
 
 ### Launch files
 - robot.launch.py
   * Argument: "sim_level"
     * 1 - VIRTUAL ROBOT (FOR SIMULATION ONLY)
     * 2 - REAL HARDWARE 
+  * Argument: "rviz"
+    * false - NO rviz
+    * true - loads rviz
+  * Argument: "gui"
+    * false - NO rqt GUI custom plugin
+    * true - loads rqt GUI custom plugin
+
 ## Usage <a name="usage"></a>
 ## Axis
-- Left-right: x
-- Anterior-posterior: z
-- Inferior-superior: y
+- Left-right (horizontal): x
+- Anterior-posterior (vertical): z
+- Inferior-superior (insertion): y
 
 ### Network connection
 - Setup the computer network to:
