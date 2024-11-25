@@ -4,14 +4,19 @@
   <xacro:macro name="smart_template" params="needle_type">
 
     <!-- Define limit values for each needle type -->
-    <xacro:property name="insertion_upper_limit" value="0.14"/>
+    <xacro:property name="insertion_upper_limit" value="0.115"/>
     <xacro:if value="${needle_type == 'default'}">
-      <xacro:property name="insertion_upper_limit" value="0.14"/>
+      <xacro:property name="insertion_upper_limit" value="0.115"/>
     </xacro:if>
     <xacro:if value="${needle_type == 'stylet'}">
-      <xacro:property name="insertion_upper_limit" value="0.12"/>
+      <xacro:property name="insertion_upper_limit" value="0.115"/>
     </xacro:if>
-
+    <xacro:if value="${needle_type == 'smartneedle'}">
+      <xacro:property name="insertion_upper_limit" value="0.165"/>
+    </xacro:if>
+    <xacro:if value="${needle_type == 'biopsygun'}">
+      <xacro:property name="insertion_upper_limit" value="0.175"/>
+    </xacro:if>
     <!-- Include materials -->
     <xacro:include filename="$(find smart_template_description)/urdf/materials.xacro" />
 
