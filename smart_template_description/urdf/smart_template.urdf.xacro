@@ -9,7 +9,7 @@
   <xacro:smart_template needle_type="$(arg needle_type)">
   </xacro:smart_template>
 
-  <!-- create link fixed to the "world" -->
+  <!-- create link fixed to the "world" 
   <link name="world" />
 
   <joint name="base_joint" type="fixed">
@@ -17,5 +17,5 @@
     <parent link="world"/>
     <child link="base_link" />
   </joint>
-  
+  -->
 </robot>
