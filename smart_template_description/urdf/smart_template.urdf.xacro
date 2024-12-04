@@ -9,13 +9,20 @@
   <xacro:smart_template needle_type="$(arg needle_type)">
   </xacro:smart_template>
 
-  <!-- create link fixed to the "world" 
-  <link name="world" />
+  <!-- create link fixed to the "world" -->
+  <link name="world">
+    <visual>        
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://smart_template_description/meshes/world.stl"/>
+      </geometry>
+    </visual>
+  </link>
 
   <joint name="base_joint" type="fixed">
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <parent link="world"/>
     <child link="base_link" />
   </joint>
-  -->
+  
 </robot>
