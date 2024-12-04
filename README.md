@@ -1,5 +1,11 @@
 # 3DOF Smart Template (ROS2) package: ros2_smart_template
 
+## Quick demo test
+To give it a try on simulation mode, launch:
+```
+ros2 launch smart_template robot.launch.py sim_level:=1 rviz:true
+```
+
 ## Overview
 This repository contains:
 

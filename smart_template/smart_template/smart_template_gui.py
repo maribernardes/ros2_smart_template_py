@@ -1,5 +1,15 @@
 import threading
-import uuid  # Import uuid to generate unique IDs
+import uuid  # Import uuid to generate unique  
+
+# Import URDF description
+import xml.etree.ElementTree as ET
+from rcl_interfaces.srv import GetParameters
+from rcl_interfaces.msg import ParameterType
+
+# from urdfpy import URDF
+# from rclpy.parameter import Parameter
+# from rclpy.executors import SingleThreadedExecutor
+# import time
 
 # Import ROS 2 libraries
 import rclpy
@@ -40,16 +50,16 @@ class SmartTemplateGUIPlugin(Plugin):
             rclpy.init(args=None)
         unique_id = uuid.uuid4().hex[:8]
         self.node = rclpy.create_node(f'smart_template_gui_{unique_id}')
+        
+        # Fetch and parse robot description
+        urdf_string = self.get_robot_description()
+        try:
+            self.node.get_logger().info(f"Successfully loaded robot_description: {len(urdf_string)} characters")
+            self.joint_names, self.joint_limits = self.extract_robot_joints(urdf_string)
+        except:
+            self.node.get_logger().error("Failed to retrieve robot_description.")
 
-        # Define Joint Names and Limits Before Subscribers
-        self.joint_names = ['horizontal_joint', 'vertical_joint', 'insertion_joint']
-        self.joint_limits = {
-            'horizontal_joint': {'min': -25.0, 'max': 25.0},  # mm
-            'vertical_joint': {'min': -30.0, 'max': 30.0},    # mm
-            'insertion_joint': {'min': 0.0, 'max': 200.0},         # mm
-        }
 
-        # Initialize joint state variables
         self.current_joint_states = {name: 0.0 for name in self.joint_names}
         self.desired_joint_values = {name: 0.0 for name in self.joint_names}
 
@@ -82,6 +92,52 @@ class SmartTemplateGUIPlugin(Plugin):
         self.update_joint_state_signal.connect(self.update_joint_state_gui)
 
         self.node.get_logger().info('Successfully connected to SmartTemplate')
+
+    def get_robot_description(self):
+        # Create a client for the 'get_parameters' service
+        param_client = self.node.create_client(GetParameters, '/robot_state_publisher/get_parameters')
+
+        # Wait for the service to become available
+        if not param_client.wait_for_service(timeout_sec=5.0):
+            self.node.get_logger().error("Service /robot_state_publisher/get_parameters not available.")
+            return None
+        # Create a request to get the 'robot_description' parameter
+        request = GetParameters.Request()
+        request.names = ['robot_description']
+        # Call the service
+        future = param_client.call_async(request)
+        rclpy.spin_until_future_complete(self.node, future)
+        # Handle the response
+        response = future.result()
+        if response is None:
+            self.node.get_logger().error("Failed to fetch robot_description parameter.")
+            return None
+        if len(response.values) == 0 or response.values[0].type != ParameterType.PARAMETER_STRING:
+            self.node.get_logger().error("robot_description parameter is empty or not a string!")
+            return None
+        # Extract the URDF string
+        urdf_string = response.values[0].string_value
+        self.node.get_logger().info(f"Robot Description retrieved: {len(urdf_string)} characters")
+        return urdf_string
+
+    def extract_robot_joints(self, urdf_string):
+        # Parse URDF
+        root = ET.fromstring(urdf_string)
+        joint_names = []
+        joint_limits = {}
+
+        for joint in root.findall('joint'):
+            joint_name = joint.get('name')
+            limit = joint.find('limit')
+            if limit is not None:
+                lower = 1000*float(limit.get('lower', '0.0'))
+                upper = 1000*float(limit.get('upper', '0.0'))
+                joint_names.append(joint_name)
+                joint_limits[joint_name] = {'min': lower, 'max': upper}
+
+        self.node.get_logger().info(f"Joint Names: {joint_names}")
+        self.node.get_logger().info(f"Joint Limits: {joint_limits}")
+        return joint_names, joint_limits
 
     def spin_once(self):
         rclpy.spin_once(self.node, timeout_sec=0)
