@@ -27,6 +27,7 @@ setup(
         'console_scripts': [
             'template = smart_template.template:main',
             'virtual_template = smart_template.virtual_template:main',
+            'world_pose_listener = smart_template.world_pose_listener:main',
             'keypress = smart_template.keypress:main',
         ],
         'rqt_gui_py.plugins': [

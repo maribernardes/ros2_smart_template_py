@@ -113,17 +113,18 @@ def generate_launch_description():
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
-        output='screen',
-        arguments = ['-d', rviz_file],
-        condition = IfCondition(LaunchConfiguration('rviz'))
+        arguments=['-d', rviz_file],
+        condition=IfCondition(LaunchConfiguration('rviz')),
+        name='rviz2',
+        output='screen'
     )
 
-    # # RQt GUI plugin conditionally
-    # gui_plugin = ExecuteProcess(
-    #     condition=IfCondition(LaunchConfiguration('gui')),
-    #     cmd=['rqt', '--standalone', 'smart_template_gui'],
-    #     output='screen'
-    # )
+    world_pose_node = Node(
+        package='smart_template',
+        executable='world_pose_listener',
+        name='world_pose_listener',
+        output='screen',
+    )
 
     # Event handler to launch the GUI plugin after the robot_state_publisher is started
     gui_plugin_event_handler = RegisterEventHandler(
@@ -139,26 +140,6 @@ def generate_launch_description():
         )
     )
 
-    # # Event handler to launch the GUI plugin after the robot_state_publisher is started
-    # gui_plugin_event_handler = RegisterEventHandler(
-    #     OnProcessStart(
-    #         target_action=robot_state_publisher_node,
-    #         on_start=[
-    #             TimerAction(
-    #                 period=10.0,  # Delay in seconds
-    #                 actions=[
-    #                     ExecuteProcess(
-    #                         condition=IfCondition(LaunchConfiguration('gui')),
-    #                         cmd=['rqt', '--standalone', 'smart_template_gui'],
-    #                         output='screen'
-    #                     )
-    #                 ]
-    #             )
-    #         ]
-    #     )
-    # )
-
-
     # Include launch arguments
     ld.add_action(arg_needle_type)
     ld.add_action(arg_sim_level)
@@ -170,9 +151,10 @@ def generate_launch_description():
     
     #Nodes
     ld.add_action(robot_state_publisher_node)
+    ld.add_action(rviz_node)
     ld.add_action(robot_real_hardware_launch)
     ld.add_action(robot_virtual_launch)
-    ld.add_action(rviz_node)
+    ld.add_action(world_pose_node)
     ld.add_action(gui_plugin_event_handler)
 
     return ld
