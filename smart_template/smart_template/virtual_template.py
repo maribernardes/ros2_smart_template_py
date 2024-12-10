@@ -7,8 +7,8 @@ from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from smart_template_interfaces.action import MoveStage
-from smart_template_interfaces.srv import ControllerCommand, GetPoint
+from smart_template_interfaces.action import MoveAndObserve
+from smart_template_interfaces.srv import Command, Move, GetPoint
 
 from ros2_igtl_bridge.msg import Transform
 from numpy import asarray, savetxt, loadtxt
@@ -22,6 +22,8 @@ from std_msgs.msg import Int8
 from sensor_msgs.msg import JointState
 
 from datetime import datetime
+
+#TODO: Set Limits from robot description
 
 HOME_X = 0.0    #X = Horizontal
 HOME_Y = 0.0    #Y = Depth
@@ -47,8 +49,8 @@ TIMEOUT = 5             # timeout (sec) for move_stage action server
 # '/stage/state/guide_pose'     (geometry_msgs.msg.PointStamped)  - robot frame
 #
 # Action/service clients:
-# '/move_stage' (smart_template_interfaces.action.MoveStage) - robot frame
-# '/command'    (smart_template_interfaces.srv.ControllerCommand) - robot frame
+# '/stage/move_and_observe'     (smart_template_interfaces.action.MoveAndObserve) - robot frame
+# '/stage/command'  (smart_template_interfaces.srv.Command) - robot frame
 # 
 #########################################################################
 
@@ -63,14 +65,15 @@ class VirtualSmartTemplate(Node):
         timer_period_stage = 0.3  # seconds
         self.timer_stage = self.create_timer(timer_period_stage, self.timer_stage_pose_callback)
         self.publisher_stage_pose = self.create_publisher(PointStamped, '/stage/state/guide_pose', 10)
-        self.publisher_joint_states = self.create_publisher(JointState, 'joint_states', 10)
+        self.publisher_joint_states = self.create_publisher(JointState, '/joint_states', 10)
 
 #### Action/Service server ##############################################
 
-        self._action_server = ActionServer(self, MoveStage, '/stage/move', execute_callback=self.execute_move_callback,\
-            callback_group=ReentrantCallbackGroup(), goal_callback=self.move_callback, cancel_callback=self.cancel_move_callback)
-        self.command_server = self.create_service(ControllerCommand, '/stage/command', self.command_callback, callback_group=ReentrantCallbackGroup())
+        self._action_server = ActionServer(self, MoveAndObserve, '/stage/move_and_observe', execute_callback=self.execute_move_and_observe_callback,\
+            callback_group=ReentrantCallbackGroup(), goal_callback=self.move_and_observe_callback, cancel_callback=self.cancel_move_and_observe_callback)
+        self.command_server = self.create_service(Command, '/stage/command', self.command_callback, callback_group=ReentrantCallbackGroup())
         self.current_position_server = self.create_service(GetPoint, '/stage/get_position', self.current_position_callback, callback_group=ReentrantCallbackGroup())
+        self.move_server = self.create_service(Move, '/stage/move', self.move_callback, callback_group=ReentrantCallbackGroup())
 
 #### Stored variables ###################################################
 
@@ -114,7 +117,7 @@ class VirtualSmartTemplate(Node):
 
     # Return current robot position
     def current_position_callback(self, request, response):
-        self.get_logger().debug('Received current position request')
+        self.get_logger().info('Request for service: /stage/get_position')
         try:
             position = self.get_position()
             response.valid = True
@@ -123,6 +126,7 @@ class VirtualSmartTemplate(Node):
             response.z = position[2]
         except:
             response.valid = False
+        self.get_logger().info('Finished: /stage/get_position')
         return response
 
     # Command robot
@@ -144,7 +148,26 @@ class VirtualSmartTemplate(Node):
             self.abort = True
         self.get_logger().info(response.response)
         return response
-    
+
+    # Move robot
+    def move_callback(self, request, response):
+        # Log the incoming request
+        self.get_logger().info(f'Received request: x={request.x}, y={request.y}, z={request.z}, eps={request.eps}')
+        try:
+            if request.eps < 0.0:
+                raise ValueError("Epsilon cannot be negative")
+            # Simulate robot movement logic here
+            # e.g., call hardware control interfaces
+            goal = np.array([request.x, request.y, request.z])
+            goal[0] = self.check_limits(goal[0],'A')
+            goal[2] = self.check_limits(goal[2],'B')
+            goal[1]= self.check_limits(goal[1],'C')
+            self.emulate_motion(goal, request.eps)
+            response.response = "Success: Robot moved to the specified position."
+        except Exception as e:
+            response.response = f"Error: {str(e)}"
+        return response
+
 #### Action functions ###################################################
 
     # Destroy de action server
@@ -154,20 +177,20 @@ class VirtualSmartTemplate(Node):
 
     # Accept or reject a client request to begin an action
     # This action server allows multiple goals in parallel
-    def move_callback(self, goal_request):
+    def move_and_observe_callback(self, goal_request):
         self.get_logger().debug('Received goal request')
         return GoalResponse.ACCEPT
 
     # Accept or reject a client request to cancel an action
-    def cancel_move_callback(self, goal_handle):
+    def cancel_move_and_observe_callback(self, goal_handle):
         self.get_logger().info('Received cancel request')
         return CancelResponse.ACCEPT
 
     # Execute a goal
-    async def execute_move_callback(self, goal_handle):
-        self.get_logger().info('Executing move_stage...')
-        feedback = MoveStage.Feedback()
-        result = MoveStage.Result()
+    async def execute_move_and_observe_callback(self, goal_handle):
+        self.get_logger().info('Executing move_and_observe...')
+        feedback = MoveAndObserve.Feedback()
+        result = MoveAndObserve.Result()
         # Start executing the action
         if goal_handle.is_cancel_requested:
             goal_handle.canceled()

@@ -27,8 +27,8 @@ from python_qt_binding.QtCore import Qt, Signal, Slot, QTimer
 # Import ROS 2 message and service types
 from action_msgs.msg import GoalStatus
 from sensor_msgs.msg import JointState
-from smart_template_interfaces.action import MoveStage
-from smart_template_interfaces.srv import ControllerCommand
+from smart_template_interfaces.action import MoveAndObserve
+from smart_template_interfaces.srv import Command
 
 from functools import partial
 
@@ -76,12 +76,12 @@ class SmartTemplateGUIPlugin(Plugin):
             JointState, '/joint_states', self.joint_state_callback, 10)
 
         # ROS Action client
-        self.action_client = ActionClient(self.node, MoveStage, '/stage/move')
-        self.node.get_logger().info('Waiting for action server /stage/move...')
+        self.action_client = ActionClient(self.node, MoveAndObserve, '/stage/move_and_observe')
+        self.node.get_logger().info('Waiting for action server /stage/move_and_observe...')
         self.action_client.wait_for_server()
 
         # ROS Service client
-        self.service_client = self.node.create_client(ControllerCommand, '/stage/command')
+        self.service_client = self.node.create_client(Command, '/stage/command')
         self.node.get_logger().info('Waiting for service /stage/command...')
         self.service_client.wait_for_service()
 
@@ -400,7 +400,7 @@ class SmartTemplateGUIPlugin(Plugin):
     # Send service request to smart_template robot 
     def send_service_request(self, cmd_string):
         self.robot_idle = False
-        request = ControllerCommand.Request()
+        request = Command.Request()
         request.command = cmd_string
         future = self.service_client.call_async(request)
         future.add_done_callback(partial(self.get_response_callback))
@@ -417,7 +417,7 @@ class SmartTemplateGUIPlugin(Plugin):
     def send_action_request(self, desired_joint_values):
         self.robot_idle = False
         # Send command to stage
-        goal_msg = MoveStage.Goal()
+        goal_msg = MoveAndObserve.Goal()
         # Use values in millimeters as the action server expects
         goal_msg.x = desired_joint_values['horizontal_joint']
         goal_msg.y = desired_joint_values['insertion_joint']

@@ -23,7 +23,7 @@ This repository contains:
 
 ### Action server
 
-- The template node exposes the /stage/move action which takes a /smart_template_interfaces/action/MoveStage action message of the format:
+- The template node exposes the /stage/move_and_observe action which takes a /smart_template_interfaces/action/MoveAndObserve action message of the format:
 ```
 float64 x
 float64 y
@@ -46,7 +46,7 @@ float64 time
 
 ### Service server
 
-- The template node exposes the /stage/command service which takes a /smart_template_interfaces/srv/ControllerCommand action message of the format:
+- The template node exposes the /stage/command service which takes a /smart_template_interfaces/srv/Command action message of the format:
 ```
 string command
 ---
