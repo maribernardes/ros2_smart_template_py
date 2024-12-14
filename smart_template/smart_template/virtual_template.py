@@ -72,8 +72,8 @@ class VirtualSmartTemplate(Node):
         self._action_server = ActionServer(self, MoveAndObserve, '/stage/move_and_observe', execute_callback=self.execute_move_and_observe_callback,\
             callback_group=ReentrantCallbackGroup(), goal_callback=self.move_and_observe_callback, cancel_callback=self.cancel_move_and_observe_callback)
         self.command_server = self.create_service(Command, '/stage/command', self.command_callback, callback_group=ReentrantCallbackGroup())
-        self.current_position_server = self.create_service(GetPoint, '/stage/get_position', self.current_position_callback, callback_group=ReentrantCallbackGroup())
         self.move_server = self.create_service(Move, '/stage/move', self.move_callback, callback_group=ReentrantCallbackGroup())
+        self.current_position_server = self.create_service(GetPoint, '/stage/get_position', self.current_position_callback, callback_group=ReentrantCallbackGroup())
 
 #### Stored variables ###################################################
 
