@@ -24,7 +24,13 @@ def generate_launch_description():
     arg_needle_type = DeclareLaunchArgument(
         'needle_type',
         default_value = 'default',
-        description = 'default / stylet'
+        description = 'default / stylet / smartneedle'
+    )  
+
+    arg_zframe_config = DeclareLaunchArgument(
+        'zframe_config',
+        default_value = 'default',
+        description = 'default / old'
     )  
 
     arg_sim_level = DeclareLaunchArgument(
@@ -96,6 +102,8 @@ def generate_launch_description():
         "name:=", LaunchConfiguration('name'),
         " ",
         "needle_type:=", LaunchConfiguration('needle_type'),
+        " ",
+        "zframe_config:=", LaunchConfiguration('zframe_config'),
     ])
     robot_description = {
         "robot_description": robot_description_content, 'publish_frequency': rate}
@@ -142,6 +150,7 @@ def generate_launch_description():
 
     # Include launch arguments
     ld.add_action(arg_needle_type)
+    ld.add_action(arg_zframe_config)
     ld.add_action(arg_sim_level)
     ld.add_action(arg_rviz)
     ld.add_action(arg_gui)
