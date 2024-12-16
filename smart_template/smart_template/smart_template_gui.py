@@ -60,7 +60,7 @@ class SmartTemplateGUIPlugin(Plugin):
             self.node.get_logger().error("Failed to retrieve robot_description.")
 
 
-        self.current_joint_states = {name: 0.0 for name in self.joint_names}
+        self.current_joint_values = {name: 0.0 for name in self.joint_names}
         self.desired_joint_values = {name: 0.0 for name in self.joint_names}
 
         # Robot status
@@ -87,9 +87,6 @@ class SmartTemplateGUIPlugin(Plugin):
 
         # Setup UI elements
         self.setup_ui()
-
-        # Connect the signal to the slot
-        self.update_joint_state_signal.connect(self.update_joint_state_gui)
 
         self.node.get_logger().info('Successfully connected to SmartTemplate')
 
@@ -161,8 +158,8 @@ class SmartTemplateGUIPlugin(Plugin):
             # Slider for current joint state
             slider = QSlider(Qt.Horizontal)
             limits = self.joint_limits[joint]
-            slider.setMinimum(int(limits['min'] * 100))
-            slider.setMaximum(int(limits['max'] * 100))
+            slider.setMinimum(int(limits['min']))
+            slider.setMaximum(int(limits['max']))
             slider.setEnabled(False)  # Non-editable
             slider.setValue(0)
 
@@ -321,7 +318,6 @@ class SmartTemplateGUIPlugin(Plugin):
         try:
             step_size = 0
             joint_key = ''
-
             if direction in ['UP', 'DOWN']:
                 step_size = float(self.up_down_step_size.text())
                 joint_key = 'vertical_joint'
@@ -334,44 +330,33 @@ class SmartTemplateGUIPlugin(Plugin):
                 step_size = float(self.insertion_step_size.text())
                 joint_key = 'insertion_joint'
                 step_modifier = 1 if direction == '+' else -1
-
+            self.desired_joint_values = self.current_joint_values
             if joint_key:
-                self.desired_joint_values[joint_key] += step_modifier * step_size
+                self.desired_joint_values[joint_key] = self.current_joint_values[joint_key] + step_modifier * step_size
                 self.send_action_request(self.desired_joint_values)
         except ValueError:
             self.node.get_logger().warn('Invalid step size value')
 
-
     def joint_state_callback(self, msg):
         try:
-            joint_states = {}
             for name, position in zip(msg.name, msg.position):
                 if name in self.joint_names:
                     # Convert position from meters to millimeters
                     position_mm = position * 1000.0
-                    joint_states[name] = position_mm
-            # Emit the signal with the joint states
-            self.update_joint_state_signal.emit(joint_states)
+                    self.current_joint_values[name] = position_mm
+                    # Update slider value
+                    slider = self.sliders[name]
+                    slider_value = int(position_mm)
+                    # Ensure slider_value is within slider range
+                    slider_min = slider.minimum()
+                    slider_max = slider.maximum()
+                    slider_value = max(min(slider_value, slider_max), slider_min)
+                    slider.setValue(slider_value)
+                    # Update the 'Current [mm]' textbox
+                    current_value_box = self.current_value_boxes[name]
+                    current_value_box.setText(f'{position_mm:.2f}')
         except Exception as e:
             self.node.get_logger().error(f'Error in joint_state_callback: {e}')
-
-    @Slot(dict)
-    def update_joint_state_gui(self, joint_states):
-        for name, position in joint_states.items():
-            if name in self.joint_names:
-                self.current_joint_states[name] = position
-                # Update slider value
-                slider = self.sliders[name]
-                slider_value = int(position * 100)
-                # Ensure slider_value is within slider range
-                slider_min = slider.minimum()
-                slider_max = slider.maximum()
-                slider_value = max(min(slider_value, slider_max), slider_min)
-                slider.setValue(slider_value)
-                # Update the 'Current [mm]' textbox
-                current_value_box = self.current_value_boxes[name]
-                current_value_box.setText(f'{position:.2f}')
-        # You can also update any other GUI elements if needed
 
     def send_desired_joint_values(self):
         # Get desired values from text boxes
