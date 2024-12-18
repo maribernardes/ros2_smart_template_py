@@ -15,13 +15,15 @@ from rcl_interfaces.msg import ParameterType
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
+from rclpy.clock import Clock
 
 # Import rqt Plugin base class
 from rqt_gui_py.plugin import Plugin
 
 # Import Qt libraries
+from python_qt_binding.QtGui import QColor
 from python_qt_binding.QtWidgets import (
-    QWidget, QLabel, QSlider, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QSpacerItem, QFrame, QGridLayout)
+    QWidget, QLabel, QSlider, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QSpacerItem, QFrame, QGridLayout, QTextEdit)
 from python_qt_binding.QtCore import Qt, Signal, Slot, QTimer
 
 # Import ROS 2 message and service types
@@ -141,7 +143,7 @@ class SmartTemplateGUIPlugin(Plugin):
 
     def setup_ui(self):
         # Main layout to hold left and right panels
-        main_layout = QHBoxLayout()
+        panel_layout = QHBoxLayout()
 
         # Left panel: Joint controls
         joint_controls_layout = QVBoxLayout()
@@ -212,21 +214,21 @@ class SmartTemplateGUIPlugin(Plugin):
 
         # Add a "Send" button at the bottom of the left panel
         send_button = QPushButton('Send')
-        send_button.clicked.connect(self.send_desired_joint_values)  # Connect button to the function
+        send_button.clicked.connect(self.handle_send_desired_joints_button)  # Connect button to the function
         joint_controls_layout.addWidget(send_button)
 
         # Add joint controls to main layout
-        main_layout.addLayout(joint_controls_layout)
+        panel_layout.addLayout(joint_controls_layout)
 
         # Add spacer between left and right panels
-        main_layout.addSpacerItem(QSpacerItem(15, 0))  # Horizontal spacer to increase space
+        panel_layout.addSpacerItem(QSpacerItem(15, 0))  # Horizontal spacer to increase space
 
         # Vertical line separator
         line = QFrame()
         line.setFrameShape(QFrame.VLine)
         line.setFrameShadow(QFrame.Sunken)
-        main_layout.addWidget(line)
-        main_layout.addSpacerItem(QSpacerItem(15, 0))  # Horizontal spacer to increase space
+        panel_layout.addWidget(line)
+        panel_layout.addSpacerItem(QSpacerItem(15, 0))  # Horizontal spacer to increase space
 
         # Right panel: Button controls
         button_controls_layout = QVBoxLayout()
@@ -309,34 +311,26 @@ class SmartTemplateGUIPlugin(Plugin):
         button_controls_layout.addLayout(plus_minus_layout)
 
         # Add button controls to main layout
-        main_layout.addLayout(button_controls_layout)
+        panel_layout.addLayout(button_controls_layout)
+
+        main_layout = QVBoxLayout()
+        messageBox_label = QLabel('Debugger')
+        self.messageBox = QTextEdit()
+        self.messageBox.setReadOnly(True)
+        
+        main_layout.addLayout(panel_layout)
+        main_layout.addWidget(messageBox_label)
+        main_layout.addWidget(self.messageBox)
 
         # Set layout to the widget
         self._widget.setLayout(main_layout)
 
-    def handle_step_motion_button(self, direction):
-        try:
-            step_size = 0
-            joint_key = ''
-            if direction in ['UP', 'DOWN']:
-                step_size = float(self.up_down_step_size.text())
-                joint_key = 'vertical_joint'
-                step_modifier = 1 if direction == 'UP' else -1
-            elif direction in ['LEFT', 'RIGHT']:
-                step_size = float(self.left_right_step_size.text())
-                joint_key = 'horizontal_joint'
-                step_modifier = 1 if direction == 'RIGHT' else -1
-            elif direction in ['+', '-']:
-                step_size = float(self.insertion_step_size.text())
-                joint_key = 'insertion_joint'
-                step_modifier = 1 if direction == '+' else -1
-            self.desired_joint_values = self.current_joint_values
-            if joint_key:
-                self.desired_joint_values[joint_key] = self.current_joint_values[joint_key] + step_modifier * step_size
-                self.send_action_request(self.desired_joint_values)
-        except ValueError:
-            self.node.get_logger().warn('Invalid step size value')
+    # Get timestamp
+    def get_ros_timestamp(self):
+        ros_time = self.node.get_clock().now()  # Get current ROS time
+        return f"[{ros_time.to_msg().sec}.{ros_time.to_msg().nanosec:09d}]"
 
+    # Callback to /joint_states publisher messages
     def joint_state_callback(self, msg):
         try:
             for name, position in zip(msg.name, msg.position):
@@ -358,31 +352,46 @@ class SmartTemplateGUIPlugin(Plugin):
         except Exception as e:
             self.node.get_logger().error(f'Error in joint_state_callback: {e}')
 
-    def send_desired_joint_values(self):
-        # Get desired values from text boxes
-        valid_input = True
+    # Handle desired joints button
+    def handle_send_desired_joints_button(self):
         for joint in self.joint_names:
             textbox = self.text_boxes[joint]
             try:
+                # Directly parse the value from the text box
                 value = float(textbox.text())
-                limits = self.joint_limits[joint]
-                if limits['min'] <= value <= limits['max']:
-                    self.desired_joint_values[joint] = value
-                else:
-                    self.node.get_logger().warn(
-                        f'Desired value for joint {joint} out of limits')
-                    valid_input = False
+                self.desired_joint_values[joint] = value
             except ValueError:
-                self.node.get_logger().warn(
-                    f'Invalid input for joint {joint}')
-                valid_input = False
+                self.node.get_logger().warn(f'Invalid input for {joint}')
+                self.messageBox.append(f'{self.get_ros_timestamp()} <span style="color: red;">Warning:</span> Invalid input for {joint}. Please enter a numeric value.')
+                return  # Exit early if any value is invalid
+        # Send action request
+        self.send_action_request(self.desired_joint_values)
 
-        if valid_input:
-            # Send action request
-            self.send_action_request(self.desired_joint_values)
+    # Handle incremental step buttons
+    def handle_step_motion_button(self, direction):
+        try:
+            step_size = 0
+            joint_key = ''
+            if direction in ['UP', 'DOWN']:
+                step_size = float(self.up_down_step_size.text())
+                joint_key = 'vertical_joint'
+                step_modifier = 1 if direction == 'UP' else -1
+            elif direction in ['LEFT', 'RIGHT']:
+                step_size = float(self.left_right_step_size.text())
+                joint_key = 'horizontal_joint'
+                step_modifier = 1 if direction == 'RIGHT' else -1
+            elif direction in ['+', '-']:
+                step_size = float(self.insertion_step_size.text())
+                joint_key = 'insertion_joint'
+                step_modifier = 1 if direction == '+' else -1
+            self.desired_joint_values = self.current_joint_values # Put desired values equal to current joints
+            if joint_key:                                         # Increment desired step value in the selected joint
+                self.desired_joint_values[joint_key] = self.current_joint_values[joint_key] + step_modifier * step_size
+                self.send_action_request(self.desired_joint_values)
+        except ValueError:
+            self.node.get_logger().warn('Invalid step size value')
 
-
-    # Send service request to smart_template robot 
+    # Send command request to smart_template robot 
     def send_service_request(self, cmd_string):
         self.robot_idle = False
         request = Command.Request()
@@ -401,16 +410,27 @@ class SmartTemplateGUIPlugin(Plugin):
     # Send action request to smart_template robot
     def send_action_request(self, desired_joint_values):
         self.robot_idle = False
-        # Send command to stage
+        corrected_values = {}
+        # Validate and correct desired_joint_values against joint_limits
+        for joint, value in desired_joint_values.items():
+            limits = self.joint_limits.get(joint, {})
+            if 'min' in limits and value < limits['min']:
+                corrected_values[joint] = limits['min']
+                self.node.get_logger().warn(f'Desired value for {joint} below limit. Setting to minimum: {limits["min"]}')
+                self.messageBox.append(f'{self.get_ros_timestamp()} <span style="color: red;">Warning:</span> Desired value for {joint} is below the limit. Setting to minimum: {limits["min"]} mm')
+            elif 'max' in limits and value > limits['max']:
+                corrected_values[joint] = limits['max']
+                self.node.get_logger().warn(f'Desired value for {joint} above limit. Setting to maximum: {limits["max"]}')
+                self.messageBox.append(f'{self.get_ros_timestamp()} <span style="color: red;">Warning:</span> Desired value for {joint} is above the limit. Setting to maximum: {limits["max"]} mm')
+            else:
+                corrected_values[joint] = value
+        # Send corrected values
         goal_msg = MoveAndObserve.Goal()
-        # Use values in millimeters as the action server expects
-        goal_msg.x = desired_joint_values['horizontal_joint']
-        goal_msg.y = desired_joint_values['insertion_joint']
-        goal_msg.z = desired_joint_values['vertical_joint']
-        goal_msg.eps = 0.5  # in mm (as per your robot's expectation)
-        self.node.get_logger().info(
-            f'Sending goal: x={goal_msg.x} mm, y={goal_msg.y} mm, z={goal_msg.z} mm')
-
+        goal_msg.x = corrected_values.get('horizontal_joint', 0.0)
+        goal_msg.y = corrected_values.get('insertion_joint', 0.0)
+        goal_msg.z = corrected_values.get('vertical_joint', 0.0)
+        goal_msg.eps = 0.5  # Set appropriate epsilon value
+        self.node.get_logger().info(f'Sending goal: x={goal_msg.x} mm, y={goal_msg.y} mm, z={goal_msg.z} mm')
         # Send goal asynchronously
         self.send_goal_future = self.action_client.send_goal_async(goal_msg)
         self.send_goal_future.add_done_callback(self.goal_response_callback)
@@ -451,9 +471,3 @@ class SmartTemplateGUIPlugin(Plugin):
         self.node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
-
-    def save_settings(self, plugin_settings, instance_settings):
-        pass
-
-    def restore_settings(self, plugin_settings, instance_settings):
-        pass
