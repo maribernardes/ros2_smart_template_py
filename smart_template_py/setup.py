@@ -2,7 +2,7 @@ import os
 from glob import glob
 from setuptools import setup, find_packages
 
-package_name = 'smart_template'
+package_name = 'smart_template_py'
 
 setup(
     name=package_name,
@@ -25,13 +25,13 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'template = smart_template.template:main',
-            'virtual_template = smart_template.virtual_template:main',
-            'world_pose_listener = smart_template.world_pose_listener:main',
-            'keypress = smart_template.keypress:main',
+            'template = smart_template_py.template:main',
+            'virtual_template = smart_template_py.virtual_template:main',
+            'world_pose_listener = smart_template_py.world_pose_listener:main',
+            'keypress = smart_template_py.keypress:main',
         ],
         'rqt_gui_py.plugins': [
-            'smart_template_gui = smart_template.smart_template_gui:SmartTemplateGUIPlugin',
+            'smart_template_gui = smart_template_py.smart_template_gui:SmartTemplateGUIPlugin',
         ],
     },
 )

@@ -79,7 +79,7 @@ def generate_launch_description():
     # Funny enough joint and robot state publishers don't have the same name for that parameter :-(
     
     # Select hardware or virtual robot
-    launch_directory = os.path.join(get_package_share_directory('smart_template'), 'launch')
+    launch_directory = os.path.join(get_package_share_directory('smart_template_py'), 'launch')
     robot_real_hardware_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(launch_directory, 'hardware_template.launch.py')),
         condition=conditions.IfCondition(
@@ -128,7 +128,7 @@ def generate_launch_description():
     )
 
     world_pose_node = Node(
-        package='smart_template',
+        package='smart_template_py',
         executable='world_pose_listener',
         name='world_pose_listener',
         output='screen',

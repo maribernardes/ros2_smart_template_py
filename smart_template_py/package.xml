@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>smart_template</name>
+  <name>smart_template_py</name>
   <version>1.0.0</version>
-  <description>3DOF Smart Template ROS2 package</description>
+  <description>3DOF Smart Template ROS2 python package</description>
   <maintainer email="maribernardes@gmail.com">Mariana Bernardes</maintainer>
   <maintainer email="pedrolfm@gmail.com">Pedro Moreira</maintainer>
   <license>TODO: License declaration</license>

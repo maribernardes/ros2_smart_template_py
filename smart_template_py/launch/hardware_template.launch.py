@@ -22,7 +22,7 @@ def generate_launch_description():
 
     # Use smart template node
     robot = Node(
-        package="smart_template",
+        package="smart_template_py",
         executable="template",
     )  
 
