@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import os
 
 from ament_index_python.packages import get_package_share_directory
@@ -20,12 +21,36 @@ from launch.actions import DeclareLaunchArgument
 
 def generate_launch_description():
 
+=======
+from launch import LaunchDescription
+from launch_ros.actions import Node
+from launch.substitutions import LaunchConfiguration
+from launch.actions import DeclareLaunchArgument
+
+def generate_launch_description():
+
+    robot_description_arg = DeclareLaunchArgument(
+        'robot_description',
+        description='URDF description of the robot'
+    )
+
+>>>>>>> a36ea18 (WIP: commit before rebase)
     # Use smart template node
     robot = Node(
         package="smart_template_py",
         executable="template",
+<<<<<<< HEAD
     )  
 
     return LaunchDescription([
+=======
+        parameters=[{
+            "robot_description": LaunchConfiguration("robot_description")
+        }]
+    )  
+
+    return LaunchDescription([
+        robot_description_arg,
+>>>>>>> a36ea18 (WIP: commit before rebase)
         robot
     ])

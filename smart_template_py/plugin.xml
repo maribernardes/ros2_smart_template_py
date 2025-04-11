@@ -1,13 +1,13 @@
 <library path="src">
-  <class name="SmartTemplate GUI" type="smart_template_py.smart_template_gui.SmartTemplateGUIPlugin" base_class_type="rqt_gui_py::Plugin">
+  <class name="SmartTemplate Python GUI" type="smart_template_py.smart_template_gui.SmartTemplateGUIPlugin" base_class_type="rqt_gui_py::Plugin">
     <description>
-      SmartTemplate GUI Plugin for rqt
+      SmartTemplate Python GUI Plugin for rqt
     </description>
     <qtgui>
       <group>
         <label>SmartTemplate</label>
       </group>
-      <label>SmartTemplate GUI</label>
+      <label>SmartTemplate Python GUI</label>
       <icon type="theme">go-next</icon>
       <statustip>Set SmartTemplate position</statustip>
     </qtgui>

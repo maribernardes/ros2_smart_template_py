@@ -5,7 +5,6 @@
   <version>1.0.0</version>
   <description>3DOF Smart Template ROS2 python package</description>
   <maintainer email="maribernardes@gmail.com">Mariana Bernardes</maintainer>
-  <maintainer email="pedrolfm@gmail.com">Pedro Moreira</maintainer>
   <license>TODO: License declaration</license>
 
   <test_depend>ament_copyright</test_depend>

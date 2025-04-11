@@ -77,6 +77,7 @@ def generate_launch_description():
     rviz_file = PathJoinSubstitution([FindPackageShare(description_package), 'rviz', 'urdf.rviz'])
     rate = LaunchConfiguration('rate', default=50.0)  # Hz, default is 10 so we're increasing that a bit. 
     # Funny enough joint and robot state publishers don't have the same name for that parameter :-(
+<<<<<<< HEAD
     
     # Select hardware or virtual robot
     launch_directory = os.path.join(get_package_share_directory('smart_template_py'), 'launch')
@@ -92,6 +93,8 @@ def generate_launch_description():
             PythonExpression([LaunchConfiguration('sim_level'), " == 1"])
         )
     )
+=======
+>>>>>>> a36ea18 (WIP: commit before rebase)
 
     # Get URDF via xacro
     robot_description_content = Command([
@@ -108,6 +111,27 @@ def generate_launch_description():
     robot_description = {
         "robot_description": robot_description_content, 'publish_frequency': rate}
 
+    # Select hardware or virtual robot
+    launch_directory = os.path.join(get_package_share_directory('smart_template_py'), 'launch')
+    robot_real_hardware_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(launch_directory, 'hardware_template.launch.py')),
+        launch_arguments={
+            'robot_description': robot_description_content
+        }.items(),
+        condition=conditions.IfCondition(
+            PythonExpression([LaunchConfiguration('sim_level'), " == 2"])
+        )
+    )
+    robot_virtual_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(launch_directory, 'virtual_template.launch.py')),
+        launch_arguments={
+            'robot_description': robot_description_content
+        }.items(),
+        condition=conditions.IfCondition(
+            PythonExpression([LaunchConfiguration('sim_level'), " == 1"])
+        )
+    )
+    
     # Nodes
     robot_state_publisher_node = Node(
         package='robot_state_publisher',
@@ -141,7 +165,7 @@ def generate_launch_description():
             on_start=[
                 ExecuteProcess(
                     condition=IfCondition(LaunchConfiguration('gui')),
-                    cmd=['rqt', '--standalone', 'smart_template_gui'],
+                    cmd=['rqt', '--standalone', 'SmartTemplate Python GUI'],
                     output='screen'
                 )
             ]

@@ -14,7 +14,7 @@ from ros2_igtl_bridge.msg import Transform
 from numpy import asarray, savetxt, loadtxt
 from scipy.ndimage import median_filter
 
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import PointStamped, Point
 from geometry_msgs.msg import Quaternion
 from transforms3d.euler import euler2quat
 from scipy.io import loadmat
@@ -22,20 +22,11 @@ from std_msgs.msg import Int8
 from sensor_msgs.msg import JointState
 
 from datetime import datetime
+import xml.etree.ElementTree as ET
+from collections import OrderedDict
 
-#TODO: Set Limits from robot description
 
-HOME_X = 0.0    #X = Horizontal
-HOME_Y = 0.0    #Y = Depth
-HOME_Z = 0.0    #Z = Vertical
-
-STEP_X = 0.05
-STEP_Y = 0.1
-STEP_Z = 0.05
-
-SAFE_LIMIT = 60.0
-
-TIMEOUT = 5             # timeout (sec) for move_stage action server 
+TIMEOUT = 5             # timeout (sec) for move_and_observe action server 
 
 #########################################################################
 #
@@ -45,12 +36,18 @@ TIMEOUT = 5             # timeout (sec) for move_stage action server
 # This node implements a virtual node to emulate the SmartTemplate
 # Implements the robot service and action servers
 #
-# Subscribes:   
-# '/stage/state/guide_pose'     (geometry_msgs.msg.PointStamped)  - robot frame
+# Publishes:   
+# '/stage/state/guide_pose'     (geometry_msgs.msg.PointStamped)  - [mm] robot frame
+# '/joint_states'               (sensor_msgs.msg.JointState)      - [m] robot frame
+#
+# Subscribe:
+# '/desired_position'           (geometry_msgs.msg.Point)  - [mm] robot frame
 #
 # Action/service clients:
 # '/stage/move_and_observe'     (smart_template_interfaces.action.MoveAndObserve) - robot frame
-# '/stage/command'  (smart_template_interfaces.srv.Command) - robot frame
+# '/stage/move'                 (smart_template_interfaces.srv.Move) - robot frame
+# '/stage/command'              (smart_template_interfaces.srv.Command) - robot frame
+# '/stage/get_position'         (smart_template_interfaces.srv.GetPoint) - robot frame
 # 
 #########################################################################
 
@@ -58,6 +55,73 @@ class VirtualSmartTemplate(Node):
 
     def __init__(self):
         super().__init__('virtual_smart_template')      
+
+    #### Get joint limits from robot description ###################################################
+        self.declare_parameter('robot_description', '')
+        urdf_str = self.get_parameter('robot_description').get_parameter_value().string_value
+        self.joint_names = []
+        self.joint_limits = {}
+        self.joint_channels = {}
+        self.joint_mm_to_count = {}
+        self.joint_count_to_mm = {}
+        try:
+            root = ET.fromstring(urdf_str)
+            for joint_elem in root.findall('joint'):
+                name = joint_elem.attrib.get('name')
+                if not name:
+                    continue
+                # === Limits ===
+                limit_elem = joint_elem.find('limit')
+                if limit_elem is not None and 'lower' in limit_elem.attrib and 'upper' in limit_elem.attrib:
+                    try:
+                        lower = float(limit_elem.attrib['lower']) * 1000  # Convert to mm
+                        upper = float(limit_elem.attrib['upper']) * 1000
+                        self.joint_names.append(name)
+                        self.joint_limits[name] = {
+                            'lower': lower,
+                            'upper': upper
+                        }
+                        self.get_logger().info(f"{name} limits [mm]: lower={lower}, upper={upper}")
+                    except ValueError:
+                        self.get_logger().warn(f"Invalid limit values for joint '{name}'")
+                # === Channel ===
+                channel_elem = joint_elem.find('channel')
+                if channel_elem is not None:
+                    channel = channel_elem.text.strip()
+                    self.joint_channels[name] = channel
+                    self.get_logger().info(f"{name} is assigned to channel '{channel}'")
+                # === mm_to_count and count_to_mm ===
+                mm_to_count_elem = joint_elem.find('mm_to_count')
+                if mm_to_count_elem is not None:
+                    try:
+                        mm_to_count = float(mm_to_count_elem.text.strip())
+                        self.joint_mm_to_count[name] = mm_to_count
+                        if mm_to_count != 0.0:
+                            self.joint_count_to_mm[name] = 1.0 / mm_to_count
+                            self.get_logger().info(f"{name} mm_to_count = {mm_to_count}, count_to_mm = {1.0/mm_to_count}")
+                        else:
+                            self.get_logger().warn(f"{name} has mm_to_count = 0.0 — cannot compute inverse.")
+                    except ValueError:
+                        self.get_logger().warn(f"Invalid mm_to_count value for joint '{name}'")
+        except ET.ParseError as e:
+            self.get_logger().error(f"Failed to parse URDF: {e}")
+
+        # Sort joints by channel order (A, B, C, ...)
+        sorted_joint_items = sorted(self.joint_channels.items(),key=lambda item: item[1])   # (joint_name, channel) sort by channel letter        
+        self.joint_names = [joint for joint, _ in sorted_joint_items]                       # Ordered list of joint_names
+        self.joint_channels = OrderedDict((joint, self.joint_channels[joint]) for joint in self.joint_names)
+        self.joint_limits = OrderedDict((joint, self.joint_limits[joint]) for joint in self.joint_names if joint in self.joint_limits)
+        self.joint_mm_to_count = OrderedDict((joint, self.joint_mm_to_count[joint]) for joint in self.joint_names if joint in self.joint_mm_to_count)
+        self.joint_count_to_mm = OrderedDict((joint, self.joint_count_to_mm[joint]) for joint in self.joint_names if joint in self.joint_count_to_mm)
+
+        for joint in self.joint_names:
+            limits = self.joint_limits.get(joint)
+            if limits:
+                self.get_logger().info(
+                    f"  {joint}: lower = {limits['lower']:.2f} mm, upper = {limits['upper']:.2f} mm"
+                )
+            else:
+                self.get_logger().info(f"  {joint}: No limits defined.")
 
 #### Published topics ###################################################
 
@@ -67,6 +131,10 @@ class VirtualSmartTemplate(Node):
         self.publisher_stage_pose = self.create_publisher(PointStamped, '/stage/state/guide_pose', 10)
         self.publisher_joint_states = self.create_publisher(JointState, '/joint_states', 10)
 
+#### Subscribed topics ###################################################
+        self.subscription_desired_position = self.create_subscription(Point, '/desired_position', self.desired_position_callback, 10)
+        self.subscription_desired_position # prevent unused variable warning
+
 #### Action/Service server ##############################################
 
         self._action_server = ActionServer(self, MoveAndObserve, '/stage/move_and_observe', execute_callback=self.execute_move_and_observe_callback,\
@@ -75,23 +143,106 @@ class VirtualSmartTemplate(Node):
         self.move_server = self.create_service(Move, '/stage/move', self.move_callback, callback_group=ReentrantCallbackGroup())
         self.current_position_server = self.create_service(GetPoint, '/stage/get_position', self.current_position_callback, callback_group=ReentrantCallbackGroup())
 
-#### Stored variables ###################################################
-
-        self.position = np.empty(shape=[0,3])           # Current position
-        self.joint_names = ['horizontal_joint', 'insertion_joint', 'vertical_joint']
-
-        self.abort = False                              # Flag to abort command
-
 #### Node initialization ###################################################
 
-        # Initial home position
-        self.position = np.array([HOME_X, HOME_Y, HOME_Z])
-        # Motion step
-        self.motion_step = np.array([STEP_X, STEP_Y, STEP_Z])
+        # Initial home position - currently initializing in (0,0,0)
+        #X = Horizontal
+        #Y = Insertion
+        #Z = Vertical
+        self.position = np.array([0.0, 0.0, 0.0])
+        self.desired_position = np.array([0.0, 0.0, 0.0])
+
+        # Motion step for simulation
+        self.motion_step = np.array([0.05, 0.1, 0.05])
+
+        # Flag to abort command
+        self.abort = False   
 
         # Print numpy floats with only 3 decimal places
         np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
 
+
+#### Internal functions ###################################################
+
+    # Get current robot position error
+    def get_error(self):
+        err = self.position - self.desired_position
+        self.get_logger().info('Error: X = (%.2f mm), Y = (%.2f mm), Z = (%.2f mm)' %(err[0], err[1], err[2]))
+        return [err[0], err[1], err[2]]
+    
+    # Get current robot position error
+    def get_position(self):
+        return np.copy(self.position)
+    
+    # Abort any ongoing motion (stop where it is)
+    def abort_motion(self):
+        self.desired_position = self.position
+
+    # Check is a joint value [mm] is within the specified limit. If not, caps it to limit
+    def check_limits(self, joint_value: float, joint_name: str) -> float:
+        limits = self.joint_limits.get(joint_name)
+        if not limits:
+            self.get_logger().warn(f"No limits found for joint '{joint_name}'. Using raw value.")
+            return joint_value
+        lower = limits['lower']
+        upper = limits['upper']
+        if joint_value < lower or joint_value > upper:
+            self.get_logger().warn(
+                f"{joint_name} value {joint_value:.2f} mm out of bounds. "
+                f"Capping to [{lower:.2f}, {upper:.2f}]"
+            )
+        return max(lower, min(joint_value, upper))
+
+    # Sends a movement command to all 3 joints based on the goal [x, y, z] in mm
+    def send_movement(self, goal):
+        if len(goal) != 3:
+            self.get_logger().error("Goal must be a list of [x, y, z] in mm.")
+            return
+        self.desired_position = goal
+
+    # Calculate euclidean error from each axis error
+    def error_3d(self, err):
+        return math.sqrt(err[0]**2+(err[1])**2+err[2]**2)
+
+    # Emulate robot motion
+    def emulate_motion(self):
+        delta = self.desired_position-self.position
+        self.get_logger().info('delta = %s' %delta)
+        step = np.minimum(np.absolute(delta), self.motion_step)
+        self.position = self.position + np.multiply(np.sign(delta), step)
+
+#### Listening callbacks ###################################################
+
+    # A request for desired position was sent
+    def desired_position_callback(self, msg):
+        goal = np.array([msg.x, msg.y, msg.z])
+        #goal = np.array([msg.point.x, msg.point.y, msg.point.z])
+        self.get_logger().info(f'Received request: x={goal[0]}, y={goal[1]}, z={goal[2]}')
+        self.send_movement(goal)
+    '''    
+    # A request for desired position was sent
+    def desired_position_callback(self, msg):
+        #goal = np.array([msg.point.x, msg.point.y, msg.point.z])
+        goal = np.array([msg.x, msg.y, msg.z])
+        self.get_logger().info(f'Desired position: x={goal[0]}, y={goal[1]}, z={goal[2]}')
+        # Create request
+        request = Move.Request()
+        request.x = goal[0]
+        request.y = goal[1]
+        request.z = goal[2]
+        request.eps = 0.5
+        # Directly call the service callback (no need for a client)
+        response = Move.Response()
+        response = self.move_callback(request, response)
+        self.get_logger().info(f"Service returned: {response.response}")
+
+
+        request = GetPoint.Request()
+        future = self.stage_position_service_client.call_async(request)
+        # When stage request done, do callback
+        future.add_done_callback(partial(self.update_stage_callback))
+        return future.result()
+    '''
 #### Publishing callbacks ###################################################
 
     # Timer to publish '/stage/state/pose'  
@@ -115,9 +266,9 @@ class VirtualSmartTemplate(Node):
 
 #### Service functions ###################################################
 
-    # Return current robot position
+    # Current position service request
     def current_position_callback(self, request, response):
-        self.get_logger().info('Request for service: /stage/get_position')
+        self.get_logger().debug('Received current position request')
         try:
             position = self.get_position()
             response.valid = True
@@ -126,27 +277,24 @@ class VirtualSmartTemplate(Node):
             response.z = position[2]
         except:
             response.valid = False
-        self.get_logger().info('Finished: /stage/get_position')
         return response
-
-    # Command robot
+    
+    # Command service request
     def command_callback(self, request, response):
         command = request.command
         self.get_logger().debug('Received command request')
         self.get_logger().info('Command %s' %(command))
-        eps = 0.5
         if command == 'HOME':
             goal = np.array([0.0, 0.0, 0.0])
+            self.send_movement(goal)
             response.response = 'Command HOME sent'
-            self.emulate_motion(goal, eps)
         elif command == 'RETRACT':
             position = self.get_position()
             goal = np.array([position[0], 0.0, position[2]])
+            self.send_movement(goal)
             response.response = 'Command RETRACT sent'
-            self.emulate_motion(goal, eps)
         elif command == 'ABORT':
-            self.abort = True
-        self.get_logger().info(response.response)
+            self.abort_motion()
         return response
 
     # Move robot
@@ -156,13 +304,8 @@ class VirtualSmartTemplate(Node):
         try:
             if request.eps < 0.0:
                 raise ValueError("Epsilon cannot be negative")
-            # Simulate robot movement logic here
-            # e.g., call hardware control interfaces
             goal = np.array([request.x, request.y, request.z])
-            goal[0] = self.check_limits(goal[0],'A')
-            goal[2] = self.check_limits(goal[2],'B')
-            goal[1]= self.check_limits(goal[1],'C')
-            self.emulate_motion(goal, request.eps)
+            self.send_movement(goal)
             response.response = "Success: Robot moved to the specified position."
         except Exception as e:
             response.response = f"Error: {str(e)}"
@@ -188,7 +331,7 @@ class VirtualSmartTemplate(Node):
 
     # Execute a goal
     async def execute_move_and_observe_callback(self, goal_handle):
-        self.get_logger().info('Executing move_and_observe...')
+        self.get_logger().debug('Executing move_and_observe...')
         feedback = MoveAndObserve.Feedback()
         result = MoveAndObserve.Result()
         # Start executing the action
@@ -196,100 +339,46 @@ class VirtualSmartTemplate(Node):
             goal_handle.canceled()
             self.get_logger().info('Goal canceled')
             return result
-        # Get goal
+        # Get goal and send
         my_goal = goal_handle.request
-        goal = np.array([my_goal.x, my_goal.y, my_goal.z])
-        eps = my_goal.eps
-        self.get_logger().debug('Command %s' %(my_goal))
-        # Send control inputs
-        goal[0] = self.check_limits(goal[0],'A')
-        goal[2] = self.check_limits(goal[2],'B')
-        goal[1]= self.check_limits(goal[1],'C')
-        self.emulate_motion(goal, eps)
-        # Feedback loop (while goal is not reached or not timeout)
-        timer_on = False
+        goal = [my_goal.x, my_goal.y, my_goal.z]
+        self.get_logger().info(' Move to %s' %(goal))
+        self.send_movement(goal) 
+        ####### Feedback loop (while goal is not reached or not timeout)
+        # TODO or not TODO: Update feedback message
         start_time = time.time()
-        timeout_time = start_time
-        position = self.get_position()
+        result.error_code = 0
         while True:
-            time.sleep(0.5)
-            # Check if aborted
-            if self.abort is True:
+            time.sleep(0.1)
+            self.emulate_motion()
+            # Check current position error
+            err = self.error_3d(self.get_error())
+            if self.abort == True:
+                # self.galil.GCommand('SH')
                 goal_handle.abort()
-                result.error_code = 2   # service for abort
+                result.error_code = 2   # abort
+                self.get_logger().info('Chegou no abort')
+                self.abort = False
                 break
-            # Check current position
-            prev_position = position
-            position = self.get_position()
-            err = self.distance_positions(goal, position)
-            # Update feedback message
-            feedback.x = position[0]
-            feedback.y = position[1]
-            feedback.z = position[2]
-            feedback.error = err
-            feedback.time = time.time()-start_time
-            goal_handle.publish_feedback(feedback)
-            # Check if reached target
-            if err <= eps:
+           # Check if reached target
+            if err <= my_goal.eps:
                 goal_handle.succeed()
-                result.error_code = 0   # no error
+                result.error_code = 0
                 break
-            # Check if moving
-            else:
-                motion = self.distance_positions(position, prev_position)
-                if (timer_on is False) and (motion < eps):
-                    timer_on = True         # Set timer
-                    timeout_time = time.time() 
-                elif (timer_on is True) and (motion >= eps):
-                    timer_on = False        # Reset timer
-                    timeout_time = time.time()
-            # Check if timeout:
-            if (timer_on is True) and ((time.time()-timeout_time) >= TIMEOUT):
+            if (time.time()-start_time) >= TIMEOUT:
                 goal_handle.abort()
                 result.error_code = 1   # timeout
                 break
         # Set result message
+        position = self.get_position()
         result.x = position[0]
         result.y = position[1]
         result.z = position[2]
-        result.error = self.distance_positions(goal, position)
+        result.error = err
         result.time = time.time()-start_time
-        self.get_logger().info('Finished move_stage. Result error code: %s' %result.error_code)
-        self.get_logger().info('Final position: x=%.4f, y=%.4f, z=%.4f' %(result.z, result.y, result.z))
+        self.get_logger().info('Finished move_and_observe')
         return result
-
-#### Internal functions ###################################################
-
-    def check_limits(self, X, Channel):
-        if Channel == "C":
-            return X
-        if X > SAFE_LIMIT:
-            self.get_logger().info("Limit reach at axis %s" % (Channel))
-            X = SAFE_LIMIT
-        elif X < -SAFE_LIMIT:
-            self.get_logger().info("Limit reach at axis %s" % (Channel))
-            X = -SAFE_LIMIT
-        return X
-    
-    def get_position(self):
-        return np.copy(self.position)
-    
-    def distance_positions(self, goal, position):        
-        return math.sqrt((goal[0]-position[0])**2+(goal[1]-position[1])**2+(goal[2]-position[2])**2)
-
-    # Emulate real robot motion
-    def emulate_motion(self, goal, eps):
-        self.abort = False
-        self.get_logger().info('<ROBOT IS MOVING>')
-        while (self.distance_positions(self.position, goal) > eps):
-            if self.abort is True:
-                break
-            delta = goal-self.position
-            step = np.minimum(np.absolute(delta), self.motion_step)
-            self.position = self.position + np.multiply(np.sign(delta), step)
-            time.sleep(0.01)
-        self.get_logger().info('<ROBOT STOPPED>')
-   
+       
 ########################################################################
 
 def main(args=None):

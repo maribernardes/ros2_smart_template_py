@@ -68,6 +68,9 @@
       <child link="vertical_link"/>
       <axis xyz="0.0 0.0 1.0"/>
       <limit upper="0.025" lower="-0.025" effort="100" velocity="100"/>
+      <!-- custom extension -->
+      <channel>B</channel>
+      <mm_to_count>1430.0</mm_to_count>
     </joint>
 
     <joint name="horizontal_joint" type="prismatic">
@@ -76,6 +79,9 @@
       <child link="horizontal_link"/>
       <axis xyz="1.0 0.0 0.0"/>
       <limit upper="0.03" lower="-0.03" effort="100" velocity="100"/>
+      <!-- custom extension -->
+      <channel>A</channel>
+      <mm_to_count>715.0</mm_to_count>
     </joint>
     
     <joint name="insertion_joint" type="prismatic">
@@ -84,6 +90,8 @@
       <child link="needle_link"/>
       <axis xyz="0.0 1.0 0.0"/>
       <limit upper="${insertion_upper_limit}" lower="0.0" effort="100" velocity="100"/>
+      <channel>C</channel>
+      <mm_to_count>-1574.8031</mm_to_count>
     </joint>
 
   </xacro:macro>

@@ -16,6 +16,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.clock import Clock
+import copy
 
 # Import rqt Plugin base class
 from rqt_gui_py.plugin import Plugin
@@ -192,7 +193,7 @@ class SmartTemplateGUIPlugin(Plugin):
             value_layout.addWidget(desired_value_label)
             value_layout.addWidget(desired_value_box)
 
-            # Layout for each joint
+            # Layout for each jointBefore
             joint_layout = QVBoxLayout()
             joint_layout.addWidget(joint_label)
             joint_layout.addLayout(slider_layout)
@@ -371,22 +372,24 @@ class SmartTemplateGUIPlugin(Plugin):
     def handle_step_motion_button(self, direction):
         try:
             step_size = 0
-            joint_key = ''
+            joint_name = None
             if direction in ['UP', 'DOWN']:
                 step_size = float(self.up_down_step_size.text())
-                joint_key = 'vertical_joint'
+                joint_name = 'vertical_joint'
                 step_modifier = 1 if direction == 'UP' else -1
             elif direction in ['LEFT', 'RIGHT']:
                 step_size = float(self.left_right_step_size.text())
-                joint_key = 'horizontal_joint'
+                joint_name = 'horizontal_joint'
                 step_modifier = 1 if direction == 'RIGHT' else -1
             elif direction in ['+', '-']:
                 step_size = float(self.insertion_step_size.text())
-                joint_key = 'insertion_joint'
+                joint_name = 'insertion_joint'
                 step_modifier = 1 if direction == '+' else -1
-            self.desired_joint_values = self.current_joint_values # Put desired values equal to current joints
-            if joint_key:                                         # Increment desired step value in the selected joint
-                self.desired_joint_values[joint_key] = self.current_joint_values[joint_key] + step_modifier * step_size
+            self.desired_joint_values = copy.deepcopy(self.current_joint_values) # Put desired values equal to current joints
+            self.node.get_logger().info('Before = %s, %s' %(self.desired_joint_values, self.current_joint_values))
+            if joint_name is not None:                                         # Increment desired step value in the selected joint
+                self.desired_joint_values[joint_name] = self.current_joint_values[joint_name] + step_modifier * step_size
+                self.node.get_logger().info('After = %s, %s' %(self.desired_joint_values, self.current_joint_values))
                 self.send_action_request(self.desired_joint_values)
         except ValueError:
             self.node.get_logger().warn('Invalid step size value')
@@ -429,7 +432,7 @@ class SmartTemplateGUIPlugin(Plugin):
         goal_msg.x = corrected_values.get('horizontal_joint', 0.0)
         goal_msg.y = corrected_values.get('insertion_joint', 0.0)
         goal_msg.z = corrected_values.get('vertical_joint', 0.0)
-        goal_msg.eps = 0.5  # Set appropriate epsilon value
+        goal_msg.eps = 0.15  # Set appropriate epsilon value
         self.node.get_logger().info(f'Sending goal: x={goal_msg.x} mm, y={goal_msg.y} mm, z={goal_msg.z} mm')
         # Send goal asynchronously
         self.send_goal_future = self.action_client.send_goal_async(goal_msg)
