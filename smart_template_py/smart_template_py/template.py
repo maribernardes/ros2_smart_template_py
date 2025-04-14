@@ -258,7 +258,8 @@ class SmartTemplate(Node):
 
     # Sends a movement command to all joints based on the goal [x, y, z] in mm.
     def position_control(self, goal: np.ndarray):
-        joints_mm = self.ik_model(goal)                           
+        joints_mm = self.ik_model(goal)       
+        joints_mm = self.check_limits(joints_mm)             
         mm_to_count = np.array(self.joints.mm_to_count, dtype=float)
         joints_count = np.round(joints_mm * mm_to_count).astype(int)
         # Send values to each joint/channel
