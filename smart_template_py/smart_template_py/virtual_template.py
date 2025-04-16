@@ -113,7 +113,7 @@ class VirtualSmartTemplate(Node):
         self.desired_joints = np.array([0.0, 0.0, 0.0])
 
         # Motion step for simulation
-        self.joints_sim_step = np.array([0.25, 0.25, 0.5])
+        self.joints_sim_step = np.array([0.25, 0.5, 0.25])
 
         # Flag to abort command
         self.abort = False   
@@ -123,16 +123,16 @@ class VirtualSmartTemplate(Node):
     # Forward kinematics
     def fk_model(self, joints: np.ndarray) -> np.ndarray:
         x = joints[0]    # horizontal_joint  (channel A)
-        z = joints[1]    # vertical_joint    (channel B)
-        y = joints[2]    # insertion_joint   (channel C) 
+        y = joints[1]    # insertion_joint   (channel B) 
+        z = joints[2]    # vertical_joint    (channel C)
         return np.array([x, y, z], dtype=float)
 
     # Inverse kinematics
     def ik_model(self, position: np.ndarray) -> np.ndarray:
         horizontal_joint = position[0]  # horizontal_joint  (channel A)
-        vertical_joint = position [2]   # vertical_joint    (channel B)
-        insertion_joint = position[1]   # insertion_joint   (channel C) 
-        return np.array([horizontal_joint, vertical_joint, insertion_joint], dtype=float)
+        insertion_joint = position[1]   # insertion_joint   (channel B) 
+        vertical_joint = position [2]   # vertical_joint    (channel C)
+        return np.array([horizontal_joint, insertion_joint, vertical_joint], dtype=float)
     
 #### Internal functions ###################################################
 

@@ -62,7 +62,6 @@ class SmartTemplateGUIPlugin(Plugin):
         except:
             self.node.get_logger().error("Failed to retrieve robot_description.")
 
-
         self.current_joint_values = {name: 0.0 for name in self.joint_names}
         self.desired_joint_values = {name: 0.0 for name in self.joint_names}
 
@@ -123,22 +122,28 @@ class SmartTemplateGUIPlugin(Plugin):
     def extract_robot_joints(self, urdf_string):
         # Parse URDF
         root = ET.fromstring(urdf_string)
-        joint_names = []
-        joint_limits = {}
-
-        for joint in root.findall('joint'):
-            joint_name = joint.get('name')
-            limit = joint.find('limit')
+        raw_channels = {}
+        raw_limits = {}
+        for joint_elem in root.findall('joint'):
+            name = joint_elem.get('name')
+            channel_elem = joint_elem.find('channel')
+            if channel_elem is not None:
+                channel = channel_elem.text.strip()
+                raw_channels[name] = channel
+            limit = joint_elem.find('limit')
             if limit is not None:
-                lower = 1000*float(limit.get('lower', '0.0'))
-                upper = 1000*float(limit.get('upper', '0.0'))
-                joint_names.append(joint_name)
-                joint_limits[joint_name] = {'min': lower, 'max': upper}
-
-        self.node.get_logger().info(f"Joint Names: {joint_names}")
-        self.node.get_logger().info(f"Joint Limits: {joint_limits}")
+                lower = 1000*float(limit.get('lower', 'nan'))
+                upper = 1000*float(limit.get('upper', 'nan'))
+                raw_limits[name] = {'min': lower, 'max': upper}
+        # Sort by channel order (A, B, C, ...)
+        sorted_joint_items = sorted(raw_channels.items(), key=lambda item: item[1])
+        joint_names = [joint for joint, _ in sorted_joint_items]
+        joint_limits = {
+            joint: raw_limits[joint]
+            for joint in joint_names if joint in raw_limits
+        }
         return joint_names, joint_limits
-
+    
     def spin_once(self):
         rclpy.spin_once(self.node, timeout_sec=0)
 
@@ -386,10 +391,10 @@ class SmartTemplateGUIPlugin(Plugin):
                 joint_name = 'insertion_joint'
                 step_modifier = 1 if direction == '+' else -1
             self.desired_joint_values = copy.deepcopy(self.current_joint_values) # Put desired values equal to current joints
-            self.node.get_logger().info('Before = %s, %s' %(self.desired_joint_values, self.current_joint_values))
+            self.node.get_logger().info('Current = %s' %(self.current_joint_values))
             if joint_name is not None:                                         # Increment desired step value in the selected joint
                 self.desired_joint_values[joint_name] = self.current_joint_values[joint_name] + step_modifier * step_size
-                self.node.get_logger().info('After = %s, %s' %(self.desired_joint_values, self.current_joint_values))
+                self.node.get_logger().info('Desired = %s' %(self.desired_joint_values))
                 self.send_action_request(self.desired_joint_values)
         except ValueError:
             self.node.get_logger().warn('Invalid step size value')
@@ -432,7 +437,7 @@ class SmartTemplateGUIPlugin(Plugin):
         goal_msg.x = corrected_values.get('horizontal_joint', 0.0)
         goal_msg.y = corrected_values.get('insertion_joint', 0.0)
         goal_msg.z = corrected_values.get('vertical_joint', 0.0)
-        goal_msg.eps = 0.15  # Set appropriate epsilon value
+        goal_msg.eps = 0.01  # Set appropriate epsilon value
         self.node.get_logger().info(f'Sending goal: x={goal_msg.x} mm, y={goal_msg.y} mm, z={goal_msg.z} mm')
         # Send goal asynchronously
         self.send_goal_future = self.action_client.send_goal_async(goal_msg)
