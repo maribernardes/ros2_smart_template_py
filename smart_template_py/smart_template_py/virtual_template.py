@@ -18,7 +18,7 @@ from geometry_msgs.msg import PointStamped, Point
 from geometry_msgs.msg import Quaternion
 from transforms3d.euler import euler2quat
 from scipy.io import loadmat
-from std_msgs.msg import Int8
+from std_msgs.msg import Int8, String
 from sensor_msgs.msg import JointState
 
 from datetime import datetime
@@ -42,6 +42,7 @@ TIMEOUT = 20.0             # timeout (sec) for move_and_observe action server
 #
 # Subscribe:
 # '/desired_position'           (geometry_msgs.msg.Point)  - [mm] robot frame
+# '/desired_command'            (std_msgs.msg.String)
 #
 # Action/service clients:
 # '/stage/move_and_observe'     (smart_template_interfaces.action.MoveAndObserve) - robot frame
@@ -97,6 +98,9 @@ class VirtualSmartTemplate(Node):
 #### Subscribed topics ###################################################
         self.subscription_desired_position = self.create_subscription(Point, '/desired_position', self.desired_position_callback, 10)
         self.subscription_desired_position # prevent unused variable warning
+
+        self.subscription_desired_command = self.create_subscription(String, '/desired_command', self.desired_command_callback, 10)
+        self.subscription_desired_command # prevent unused variable warning
 
 #### Action/Service server ##############################################
 
@@ -272,6 +276,23 @@ class VirtualSmartTemplate(Node):
         self.get_logger().info(f'Received request: x={goal[0]}, y={goal[1]}, z={goal[2]}')
         self.position_control(goal)
         self.start_emulated_motion_until_converged()
+
+    # A request for desired command was sent
+    def desired_command_callback(self, msg):
+        command =  msg.data
+        self.get_logger().debug('Received command request')
+        self.get_logger().info('Command %s' %(command))
+        if command == 'HOME':
+            goal = np.array([0.0, 0.0, 0.0])
+            self.position_control(goal)
+            self.start_emulated_motion_until_converged()
+        elif command == 'RETRACT':
+            position = self.get_position()
+            goal = np.array([position[0], 0.0, position[2]])
+            self.position_control(goal)
+            self.start_emulated_motion_until_converged()
+        elif command == 'ABORT':
+            self.abort_motion()
 
 #### Publishing callbacks ###################################################
 
