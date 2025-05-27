@@ -5,19 +5,20 @@
   
   <xacro:macro name="zframe" params="zframe_config">
 
+    <!-- Define zframe if missing zframe_config parameter: based on geometry with 1 LEGO piece at the robot support-->
     <xacro:property name="zframe_orientation" value="-1.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 -1.0"/> <!-- Rotation matrix (row by row) -->
-    <xacro:property name="zframe_position" value="0.005 0.1012 -0.1130"/> <!-- Position (x, y, z) -->
+    <xacro:property name="zframe_position" value="0.0 0.0980 -0.1283"/> <!-- Position (x, y, z) --> 
 
     <!-- Define zframe_position based on zframe_config -->
-    <xacro:if value="${zframe_config == 'default'}">
+    <xacro:if value="${zframe_config == 'new'}">  <!-- zframe from registration experiment in AMIGO (2025-04-24)-->
       <xacro:property name="zframe_orientation" value="-0.9991865251176608 -0.0227471589597594 0.03329936281010742 -0.021473120893579854 0.9990420341682031 0.03813030515513918 -0.03413481814365832 0.037384247883267614 -0.9987178325638667"/> <!-- Rotation matrix (row by row) -->
       <xacro:property name="zframe_position" value="0.0012116279772463 0.10551172656992 -0.11125511768768"/> <!-- Position (x, y, z) -->
     </xacro:if>
-    <xacro:if value="${zframe_config == 'old'}"> <!-- SmartNeedle Animal Experiment -->
+    <xacro:if value="${zframe_config == 'old'}"> <!-- zframe from SmartNeedle Animal Experiment in 221 Longwood (2023-12-20) -->
       <xacro:property name="zframe_position" value="0.0 0.0590 -0.1190"/> <!-- Position (x, y, z) -->
     </xacro:if>
 
-    <!-- Combine position and orientation into a homogeneous matrix -->
+    <!-- Combine position and orientation into a homogeneous matrix (just making things easier on 3D Slicer)-->
     <xacro:property name="zframe_pose" value="
       ${zframe_orientation.split(' ')[0]} ${zframe_orientation.split(' ')[1]} ${zframe_orientation.split(' ')[2]} ${zframe_position.split(' ')[0]}
       ${zframe_orientation.split(' ')[3]} ${zframe_orientation.split(' ')[4]} ${zframe_orientation.split(' ')[5]} ${zframe_position.split(' ')[1]}
