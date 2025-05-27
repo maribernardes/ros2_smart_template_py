@@ -147,7 +147,7 @@ def generate_launch_description():
             on_start=[
                 ExecuteProcess(
                     condition=IfCondition(LaunchConfiguration('gui')),
-                    cmd=['rqt', '--standalone', 'SmartTemplate Python GUI'],
+                    cmd=['rqt', '--standalone', 'smart_template_gui'],
                     output='screen'
                 )
             ]

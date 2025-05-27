@@ -1,31 +1,21 @@
-import threading
 import uuid  # Import uuid to generate unique  
+import copy
 
 # Import URDF description
 import xml.etree.ElementTree as ET
 from rcl_interfaces.srv import GetParameters
 from rcl_interfaces.msg import ParameterType
 
-# from urdfpy import URDF
-# from rclpy.parameter import Parameter
-# from rclpy.executors import SingleThreadedExecutor
-# import time
-
 # Import ROS 2 libraries
 import rclpy
-from rclpy.node import Node
 from rclpy.action import ActionClient
-from rclpy.clock import Clock
-import copy
 
 # Import rqt Plugin base class
 from rqt_gui_py.plugin import Plugin
 
 # Import Qt libraries
-from python_qt_binding.QtGui import QColor
-from python_qt_binding.QtWidgets import (
-    QWidget, QLabel, QSlider, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QSpacerItem, QFrame, QGridLayout, QTextEdit)
-from python_qt_binding.QtCore import Qt, Signal, Slot, QTimer
+from python_qt_binding.QtWidgets import (QWidget, QLabel, QSlider, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout, QSpacerItem, QFrame, QGridLayout, QTextEdit)
+from python_qt_binding.QtCore import Qt, Signal, QTimer
 
 # Import ROS 2 message and service types
 from action_msgs.msg import GoalStatus
@@ -391,10 +381,12 @@ class SmartTemplateGUIPlugin(Plugin):
                 joint_name = 'insertion_joint'
                 step_modifier = 1 if direction == '+' else -1
             self.desired_joint_values = copy.deepcopy(self.current_joint_values) # Put desired values equal to current joints
-            self.node.get_logger().info('Current = %s' %(self.current_joint_values))
+            formatted = {k: f"{v:.2f}" for k, v in self.current_joint_values.items()}
+            self.node.get_logger().info(f"Current = {formatted}")
             if joint_name is not None:                                         # Increment desired step value in the selected joint
                 self.desired_joint_values[joint_name] = self.current_joint_values[joint_name] + step_modifier * step_size
-                self.node.get_logger().info('Desired = %s' %(self.desired_joint_values))
+                formatted = {k: f"{v:.2f}" for k, v in self.desired_joint_values.items()}
+                self.node.get_logger().info(f"Desired = {formatted}")
                 self.send_action_request(self.desired_joint_values)
         except ValueError:
             self.node.get_logger().warn('Invalid step size value')
