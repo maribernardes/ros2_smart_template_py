@@ -4,6 +4,14 @@
 To give it a try on simulation mode, launch:
 ```
 ros2 launch smart_template_py robot.launch.py sim_level:=1 rviz:=true
+
+```
+Examples with different parameters:
+```
+ros2 launch smart_template_py robot.launch.py rviz:=false gui:=true robot_mode:=default needle_type:=smartneedle zframe_config:=old sim_level:=2
+
+ros2 launch smart_template_py robot.launch.py rviz:=false gui:=true robot_mode:=calibration needle_type:=stylet zframe_config:=new sim_level:=2
+
 ```
 
 ## Overview

@@ -21,6 +21,12 @@ def generate_launch_description():
 
     ld = LaunchDescription()
 
+    arg_robot_mode = DeclareLaunchArgument(
+        'robot_mode',
+        default_value = 'default',
+        description = 'default / calibration' 
+    )  
+
     arg_needle_type = DeclareLaunchArgument(
         'needle_type',
         default_value = 'default',
@@ -85,6 +91,8 @@ def generate_launch_description():
         PathJoinSubstitution([FindPackageShare(description_package), 'urdf', description_file]),
         " ",
         "name:=", LaunchConfiguration('name'),
+        " ",
+        "robot_mode:=", LaunchConfiguration('robot_mode'),
         " ",
         "needle_type:=", LaunchConfiguration('needle_type'),
         " ",
@@ -155,6 +163,7 @@ def generate_launch_description():
     )
 
     # Include launch arguments
+    ld.add_action(arg_robot_mode)
     ld.add_action(arg_needle_type)
     ld.add_action(arg_zframe_config)
     ld.add_action(arg_sim_level)

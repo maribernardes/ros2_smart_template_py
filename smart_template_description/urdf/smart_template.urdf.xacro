@@ -4,10 +4,11 @@
   <!-- Argument for needle_type -->
   <xacro:arg name="needle_type" default="default"/>
   <xacro:arg name="zframe_config" default="default"/>
+  <xacro:arg name="robot_mode" default="default"/>
 
   <!-- smart_template URDF -->
   <xacro:include filename="$(find smart_template_description)/urdf/smart_template.xacro"/>
-  <xacro:smart_template needle_type="$(arg needle_type)">
+  <xacro:smart_template needle_type="$(arg needle_type)" robot_mode="$(arg robot_mode)">
   </xacro:smart_template>
 
   <!-- zFrame URDF -->
