@@ -36,7 +36,7 @@ def generate_launch_description():
     arg_zframe_config = DeclareLaunchArgument(
         'zframe_config',
         default_value = 'default',
-        description = 'default / old'
+        description = 'default / test / new / old'
     )  
 
     arg_sim_level = DeclareLaunchArgument(
